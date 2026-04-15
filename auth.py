@@ -18,7 +18,10 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 def get_db():
-    conn = sqlite3.connect("users.db")
+    db_path = "users.db"
+    if os.path.exists("/data"):
+        db_path = "/data/users.db"
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 

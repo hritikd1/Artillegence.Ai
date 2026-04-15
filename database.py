@@ -15,7 +15,11 @@ from datetime import datetime
 from contextlib import contextmanager
 from typing import Optional
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "artillegence.db")
+# Database path: check for Render persistent disk mount point (/data)
+if os.path.exists("/data"):
+    DB_PATH = "/data/artillegence.db"
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "artillegence.db")
 
 # ── Connection helper ──────────────────────────────────────────────────────
 

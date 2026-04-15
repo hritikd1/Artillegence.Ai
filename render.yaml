@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: artillegence-ai
+    env: python
+    buildCommand: "cd frontend && npm install && npm run build && cd .. && pip install -r requirements.txt && playwright install --with-deps chromium"
+    startCommand: "python main.py"
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: NODE_VERSION
+        value: 20.0.0
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: BING_RSS_URL
+        sync: false
+    disk:
+      name: artillegence-data
+      mountPath: /data
+      sizeGB: 1
