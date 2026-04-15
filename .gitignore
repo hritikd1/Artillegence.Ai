@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.env
+
+# Databases
+*.db
+!users.db.template
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.eslintcache
+
+# Scraper Temp
+.tmp_scrapling/
+downloads/
+scratch/
+
+# IDEs
+.vscode/
+.idea/
+
+# Local tests and outputs
+test_*.py
+test_*.png
+test.html
+market_analysis.json
+opportunities.json
+trending.json
+telegram.json
+indian_market.json
+google_news.json
+google_trends.json
+market_insights.json
+investor_knowledge_base.json
+news_monitor_session.session

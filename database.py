@@ -1,0 +1,281 @@
+"""
+database.py — Artillegence AI Central Database Layer
+Replaces all ad-hoc JSON file reads/writes with atomic SQLite operations.
+Tables:
+  - intelligence_cache   : latest output per agent (replaces *.json files)
+  - geo_events           : persistent geo-tagged events (survives restarts)
+  - signal_log           : AI signal accuracy tracking (replaces signal_log.json)
+  - agent_memory         : rolling context summaries per agent (new — #5)
+"""
+
+import sqlite3
+import json
+import os
+from datetime import datetime
+from contextlib import contextmanager
+from typing import Optional
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "artillegence.db")
+
+# ── Connection helper ──────────────────────────────────────────────────────
+
+@contextmanager
+def get_conn():
+    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")   # allow concurrent readers
+    conn.execute("PRAGMA synchronous=NORMAL") # balance safety vs speed
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ── Schema Init ────────────────────────────────────────────────────────────
+
+def init_db():
+    """Create all tables if they don't exist. Safe to call on every startup."""
+    with get_conn() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS intelligence_cache (
+                agent       TEXT PRIMARY KEY,
+                data        TEXT NOT NULL,          -- JSON blob
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS geo_events (
+                id          TEXT PRIMARY KEY,
+                data        TEXT NOT NULL,          -- JSON blob for single event
+                severity    TEXT DEFAULT 'low',
+                timestamp   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS signal_log (
+                id          TEXT PRIMARY KEY,
+                agent       TEXT NOT NULL,
+                signal_type TEXT,
+                target      TEXT,
+                direction   TEXT,
+                confidence  TEXT,
+                reasoning   TEXT,
+                timestamp   TEXT NOT NULL,
+                outcome     TEXT,
+                actual_move TEXT,
+                verified_at TEXT,
+                correct     INTEGER                 -- NULL=pending, 1=correct, 0=wrong
+            );
+
+            CREATE TABLE IF NOT EXISTS agent_memory (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent       TEXT NOT NULL,
+                summary     TEXT NOT NULL,
+                recorded_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent);
+            CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
+        """)
+    print("✅ [DB] Artillegence database initialised at", DB_PATH)
+
+
+# ── Intelligence Cache ─────────────────────────────────────────────────────
+
+def save_intelligence(agent: str, data: dict):
+    """Upsert the latest data for an agent."""
+    payload = json.dumps(data, default=str)
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO intelligence_cache(agent, data, updated_at)
+               VALUES(?, ?, ?)
+               ON CONFLICT(agent) DO UPDATE SET
+                   data       = excluded.data,
+                   updated_at = excluded.updated_at""",
+            (agent, payload, datetime.now().isoformat())
+        )
+
+
+def get_intelligence(agent: str) -> Optional[dict]:
+    """Return the latest cached data for an agent, or None."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM intelligence_cache WHERE agent = ?", (agent,)
+        ).fetchone()
+    if row:
+        try:
+            return json.loads(row["data"])
+        except Exception:
+            return None
+    return None
+
+
+def get_all_intelligence() -> dict:
+    """Return all cached agent outputs keyed by agent name."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT agent, data, updated_at FROM intelligence_cache"
+        ).fetchall()
+    result = {}
+    for row in rows:
+        try:
+            result[row["agent"]] = {
+                "data": json.loads(row["data"]),
+                "updated_at": row["updated_at"]
+            }
+        except Exception:
+            pass
+    return result
+
+
+# ── Geo Events ─────────────────────────────────────────────────────────────
+
+def save_geo_events(events: list):
+    """Upsert a batch of geo events. Keeps the 200 most recent."""
+    with get_conn() as conn:
+        for ev in events:
+            conn.execute(
+                """INSERT INTO geo_events(id, data, severity, timestamp)
+                   VALUES(?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       data      = excluded.data,
+                       severity  = excluded.severity,
+                       timestamp = excluded.timestamp""",
+                (
+                    ev["id"],
+                    json.dumps(ev, default=str),
+                    ev.get("severity", "low"),
+                    ev.get("timestamp", datetime.now().isoformat())
+                )
+            )
+        # Prune to 200 most recent
+        conn.execute("""
+            DELETE FROM geo_events WHERE id NOT IN (
+                SELECT id FROM geo_events ORDER BY timestamp DESC LIMIT 200
+            )
+        """)
+
+
+def get_geo_events(limit: int = 200) -> list:
+    """Return geo events ordered by timestamp descending."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT data FROM geo_events ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+    result = []
+    for row in rows:
+        try:
+            result.append(json.loads(row["data"]))
+        except Exception:
+            pass
+    return result
+
+
+# ── Signal Log ─────────────────────────────────────────────────────────────
+
+def log_signal(agent: str, signal_type: str, target: str,
+               direction: str, confidence: str, reasoning: str = ""):
+    """Record a new AI-generated signal."""
+    import uuid
+    sid = f"sig-{uuid.uuid4().hex[:8]}"
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO signal_log
+               (id, agent, signal_type, target, direction, confidence, reasoning, timestamp)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
+            (sid, agent, signal_type, target, direction, confidence,
+             reasoning[:300], datetime.now().isoformat())
+        )
+
+
+def get_signal_scorecard() -> dict:
+    """Calculate overall signal accuracy from the DB."""
+    with get_conn() as conn:
+        all_signals = [dict(r) for r in conn.execute(
+            "SELECT * FROM signal_log ORDER BY timestamp DESC"
+        ).fetchall()]
+
+    verified = [s for s in all_signals if s.get("correct") is not None]
+    total    = len(verified)
+    correct  = sum(1 for s in verified if s["correct"])
+
+    by_agent: dict = {}
+    for s in verified:
+        ag = s["agent"]
+        by_agent.setdefault(ag, {"total": 0, "correct": 0})
+        by_agent[ag]["total"] += 1
+        if s["correct"]:
+            by_agent[ag]["correct"] += 1
+
+    return {
+        "total_signals":        len(all_signals),
+        "verified_signals":     total,
+        "correct_signals":      correct,
+        "accuracy_pct":         round((correct / total) * 100, 1) if total > 0 else 0,
+        "pending_verification": len(all_signals) - total,
+        "by_agent": {
+            ag: {
+                "total":        d["total"],
+                "correct":      d["correct"],
+                "accuracy_pct": round((d["correct"] / d["total"]) * 100, 1) if d["total"] > 0 else 0,
+            }
+            for ag, d in by_agent.items()
+        },
+        "recent_signals": all_signals[:10],
+        "last_updated":   datetime.now().isoformat(),
+    }
+
+
+# ── Agent Memory (#5) ──────────────────────────────────────────────────────
+
+def append_agent_memory(agent: str, summary: str):
+    """Add a cycle summary to agent memory. Keeps only the last 10 per agent."""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO agent_memory(agent, summary, recorded_at) VALUES(?, ?, ?)",
+            (agent, summary[:1500], datetime.now().isoformat())
+        )
+        # Prune: keep only latest 10 rows per agent
+        conn.execute("""
+            DELETE FROM agent_memory
+            WHERE agent = ?
+              AND id NOT IN (
+                  SELECT id FROM agent_memory
+                  WHERE agent = ?
+                  ORDER BY recorded_at DESC
+                  LIMIT 10
+              )
+        """, (agent, agent))
+
+
+def get_agent_memory(agent: str, limit: int = 4) -> list:
+    """Return the last `limit` summaries for an agent, oldest-first."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT summary FROM agent_memory
+               WHERE agent = ?
+               ORDER BY recorded_at DESC
+               LIMIT ?""",
+            (agent, limit)
+        ).fetchall()
+    return [r["summary"] for r in reversed(rows)]
+
+
+def build_memory_context(agent: str) -> str:
+    """Build a formatted memory context block to prepend to Mistral prompts."""
+    memories = get_agent_memory(agent, limit=4)
+    if not memories:
+        return ""
+    lines = "\n---\n".join(memories)
+    return (
+        "\n\n=== YOUR LAST FEW CYCLE SUMMARIES (for trend awareness) ===\n"
+        f"{lines}\n"
+        "=== END OF MEMORY — use only the headlines below for NEW analysis ===\n"
+    )
+
+
+# ── Bootstrap on import ────────────────────────────────────────────────────
+init_db()
