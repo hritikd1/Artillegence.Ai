@@ -15,13 +15,7 @@ services:
         generateValue: true
       - key: MISTRAL_API_KEY
         sync: false
-      - key: TELEGRAM_API_ID
-        sync: false
-      - key: TELEGRAM_API_HASH
-        sync: false
       - key: GROQ_API_KEY
-        sync: false
-      - key: BING_RSS_URL
         sync: false
     disk:
       name: artillegence-data

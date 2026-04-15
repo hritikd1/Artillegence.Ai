@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API credentials
-SERP_API_KEY = os.getenv("SERP_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+# API credentials — Only non-public scrapers would need keys.
+# (Dynamic scrapers below use public RSS or web previews and require NO keys).
 
 class WebScraper:
     """A robust web scraper for fetching and cleaning article content."""
@@ -414,135 +414,6 @@ class GoogleNewsScraper(NewsSource):
         self.last_check = datetime.now()
         filtered = self.filter_by_date(results, hours)
         return filtered[:limit]
-
-class SerpNewsSearch(NewsSource):
-    """News search using SERP API - specifically google_news engine"""
-    def __init__(self, name, source_type, query_templates):
-        super().__init__(name, source_type)
-        self.query_templates = query_templates
-        self.api_key = SERP_API_KEY
-    
-    async def fetch_data(self, limit=5, hours=6):
-        results = []
-        for query in self.query_templates:
-            try:
-                formatted_query = query.format(date=datetime.now().strftime('%B %Y'))
-                params = {
-                    'api_key': self.api_key,
-                    'q': formatted_query,
-                    'engine': 'google_news',
-                    'num': limit,
-                    'gl': 'in',
-                    'tbs': 'qdr:d'
-                }
-                response = await asyncio.to_thread(requests.get, 'https://serpapi.com/search', params=params)
-                data = response.json()
-                
-                if 'news_results' in data:
-                    for result in data['news_results']:
-                        timestamp = datetime.now().isoformat()
-                        if 'date' in result:
-                            try:
-                                timestamp = datetime.strptime(result['date'], '%Y-%m-%d %H:%M:%S').isoformat()
-                            except (ValueError, TypeError):
-                                try:
-                                    timestamp = datetime.strptime(result['date'], '%b %d, %Y').isoformat()
-                                except:
-                                    pass
-                                    
-                        results.append({
-                            'title': result.get('title', ''),
-                            'snippet': result.get('snippet', ''),
-                            'link': result.get('link', ''),
-                            'source': result.get('source', ''),
-                            'source_type': self.source_type,
-                            'query': formatted_query,
-                            'timestamp': timestamp
-                        })
-            except Exception as e:
-                print(f"Error fetching SERP news data: {e}")
-                
-        self.last_check = datetime.now()
-        return self.filter_by_date(results, hours)
-
-class SerpOrganicSearch(NewsSource):
-    """Organic google search using SERP API - for general article finding"""
-    def __init__(self, name, source_type, query_templates):
-        super().__init__(name, source_type)
-        self.query_templates = query_templates
-        self.api_key = SERP_API_KEY
-    
-    async def fetch_data(self, limit=5):
-        results = []
-        for query in self.query_templates:
-            try:
-                formatted_query = query.format(date=datetime.now().strftime('%B %Y'))
-                params = {
-                    'api_key': self.api_key,
-                    'q': formatted_query,
-                    'engine': 'google',
-                    'num': limit,
-                    'gl': 'us',
-                    'tbs': 'qdr:d'
-                }
-                response = await asyncio.to_thread(requests.get, 'https://serpapi.com/search', params=params)
-                data = response.json()
-                
-                if 'organic_results' in data:
-                    for result in data['organic_results']:
-                        results.append({
-                            'title': result.get('title', ''),
-                            'snippet': result.get('snippet', ''),
-                            'link': result.get('link', ''),
-                            'source': result.get('source', 'Google Search'),
-                            'source_type': self.source_type,
-                            'query': formatted_query,
-                            'timestamp': datetime.now().isoformat()
-                        })
-            except Exception as e:
-                print(f"Error fetching SERP organic data: {e}")
-                
-        self.last_check = datetime.now()
-        return results
-
-class NewsAPISource(NewsSource):
-    """NewsAPI.org data source"""
-    def __init__(self, name, source_type, categories=None, countries=None):
-        super().__init__(name, source_type)
-        self.api_key = NEWS_API_KEY
-        self.categories = categories or ['business', 'technology', 'health']
-        self.countries = countries or ['in']
-        
-    async def fetch_data(self, limit=20, hours=6):
-        results = []
-        try:
-            for country in self.countries:
-                for category in self.categories:
-                    params = {
-                        'apiKey': self.api_key,
-                        'country': country,
-                        'category': category,
-                        'pageSize': limit
-                    }
-                    response = await asyncio.to_thread(requests.get, 'https://newsapi.org/v2/top-headlines', params=params)
-                    data = response.json()
-                    
-                    if data.get('status') == 'ok' and 'articles' in data:
-                        for article in data['articles']:
-                            results.append({
-                                'title': article.get('title', ''),
-                                'snippet': article.get('description', ''),
-                                'link': article.get('url', ''),
-                                'source': article.get('source', {}).get('name', ''),
-                                'source_type': self.source_type,
-                                'category': category,
-                                'timestamp': article.get('publishedAt', datetime.now().isoformat())
-                            })
-        except Exception as e:
-            print(f"Error fetching News API data: {e}")
-            
-        self.last_check = datetime.now()
-        return self.filter_by_date(results, hours)
 
 class TelegramChannelScraper(NewsSource):
     """Scrapes public posts from a Telegram channel using web preview."""
