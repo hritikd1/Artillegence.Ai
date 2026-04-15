@@ -34,8 +34,8 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers (no --with-deps needed because we installed them above)
-RUN playwright install chromium
+# Install Scrapling browsers and Playwright browsers
+RUN python -m scrapling install && playwright install chromium
 
 # Build the frontend
 RUN cd frontend && npm install && npm run build
