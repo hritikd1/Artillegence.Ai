@@ -11,7 +11,7 @@ bytez
 playwright
 Pillow
 groq
-scrapling[fetchers]
+scrapling
 pytrends
 PyJWT
 bcrypt
