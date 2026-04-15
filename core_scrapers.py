@@ -23,15 +23,18 @@ class WebScraper:
             return None
             
         try:
-            from scrapling.fetchers import Fetcher
-            # Use Scrapling with Chrome TLS impersonation to bypass bot checks
-            response = await asyncio.to_thread(Fetcher.get, url, impersonate='chrome', timeout=timeout)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+            }
+            # Standard requests with a modern browser User-Agent
+            response = await asyncio.to_thread(requests.get, url, headers=headers, timeout=timeout)
             
-            if response.status != 200:
-                print(f"Scrapling returned status {response.status} for {url}")
+            if response.status_code != 200:
+                print(f"Scraper returned status {response.status_code} for {url}")
                 return None
 
-            soup = BeautifulSoup(response.body, 'html.parser')
+            soup = BeautifulSoup(response.text, 'html.parser')
 
             for script_or_style in soup(['script', 'style', 'nav', 'footer', 'aside']):
                 script_or_style.decompose()
@@ -428,13 +431,13 @@ class TelegramChannelScraper(NewsSource):
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         
         try:
-            from scrapling.fetchers import Fetcher
             while len(results) < limit:
-                response = await asyncio.to_thread(Fetcher.get, current_url, impersonate='chrome', timeout=10)
-                if response.status != 200:
+                # Use standard requests for Telegram web previews
+                response = await asyncio.to_thread(requests.get, current_url, headers=headers, timeout=10)
+                if response.status_code != 200:
                     break
                     
-                soup = BeautifulSoup(response.body, 'html.parser')
+                soup = BeautifulSoup(response.text, 'html.parser')
                 messages = soup.find_all('div', class_='tgme_widget_message')
                 if not messages:
                     break
