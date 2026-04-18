@@ -9,9 +9,11 @@ RUN npm run build
 # --- STAGE 2: Final Runtime ---
 FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
 
-# Set production environment
+# Set production environment and Playwright optimization
 ENV PYTHONUNBUFFERED=1
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 WORKDIR /app
 
@@ -19,11 +21,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Scrapling and ensure Playwright Chromium is linked
-# The base image already contains the browsers, but this ensures 
-# the Python environment is fully initialized.
-RUN playwright install chromium && \
-    python -m scrapling install
+# Install Scrapling and link Playwright Chromium
+# We split these to catch the exact error if one fails
+RUN playwright install chromium
+RUN python -m scrapling install
 
 # Copy application code
 COPY . .
