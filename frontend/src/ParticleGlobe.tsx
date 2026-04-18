@@ -91,7 +91,7 @@ interface GeoEvent {
 }
 
 interface ParticleGlobeProps {
-  events: GeoEvent[];
+  events?: GeoEvent[];
 }
 
 export default function ParticleGlobe({ events }: ParticleGlobeProps) {
@@ -100,6 +100,13 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
   const [liveNews, setLiveNews] = useState<any[]>([]);
   const [dimensions, setDimensions] = useState({ width: 800, height: 800 });
   const animFrameRef = useRef<number>(0);
+
+  // Sync props to state for live updates
+  useEffect(() => {
+    if (events && events.length > 0) {
+      setLiveNews(events);
+    }
+  }, [events]);
 
   // Responsive sizing
   useEffect(() => {
