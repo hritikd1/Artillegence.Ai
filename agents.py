@@ -39,6 +39,7 @@ def strip_markdown(text: str) -> str:
 async def call_mistral(prompt: str, system_msg: str | None = None) -> str:
     """Call Mistral AI. Returns clean plain-text response."""
     default_system = (
+        f"Today's date is {datetime.now().strftime('%A, %B %d, %Y')}. "
         "You are an expert Indian stock market analyst. "
         "CRITICAL RULES: "
         "1) Never use markdown formatting like #, ##, **, ---, or tables. "
@@ -178,14 +179,16 @@ ANALYSIS_SECTIONS = {
     'global_impact': {
         'prompt': (
             "Based ONLY on these headlines, what global events are impacting Indian markets? "
+            "You MUST explicitly analyze Commodity & Raw Material trends (Oil, Gold, Metals) "
+            "and how they affect the Indian economy. "
             "Structure your response as:\n"
             "GLOBAL IMPACT SCORE: [1-10] how much global events are affecting India\n"
-            "KEY EVENTS: List each event and its impact on India (cite specific headlines)\n"
+            "KEY EVENTS & RAW MATERIALS: List each event/commodity and its impact on India (cite specific headlines)\n"
             "AFFECTED SECTORS: Which Indian sectors are most affected and why\n"
             "OUTLOOK: Short-term impact assessment\n"
             "Write in plain text only."
         ),
-        'terms': ["global markets impact India", "US Fed India stocks", "crude oil India market"]
+        'terms': ["global markets impact India", "crude oil price impact India", "gold and metal prices India stock market", "US Fed India stocks"]
     },
     'sectoral_analysis': {
         'prompt': (

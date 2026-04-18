@@ -25,7 +25,8 @@ class MistralAnalyzer:
             }
             
             # Create a structured prompt with context if available
-            system_prompt = '''
+            system_prompt = f'''
+            Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
             You are an economic intelligence analyst specializing in Indian markets. 
             Analyze the given information and provide exactly these sections with these exact headings:
             
@@ -119,7 +120,8 @@ class MistralAnalyzer:
                 'Content-Type': 'application/json'
             }
             
-            system_prompt = '''
+            system_prompt = f'''
+            Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
             You are an elite geopolitical financial analyst at a top-tier hedge fund. 
             Analyze the provided intelligence report and rapidly deduce its highly specific impact on global markets.
             
@@ -194,7 +196,8 @@ class MistralAnalyzer:
             [f"- [{n['source']}] {n['title']} ({n['pub_date'][:16]})" for n in news_items]
         ) if news_items else "No recent news headlines found."
 
-        system_prompt = """You are an elite autonomous trading analyst at a top-tier hedge fund. 
+        system_prompt = f"""Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
+        You are an elite autonomous trading analyst at a top-tier hedge fund. 
         You have deep expertise in technical analysis, fundamental analysis, price action, volume, VWAP, wave theory, and global macro.
         
         You will be given a stock ticker and its latest news headlines plus any relevant geopolitical context.
@@ -328,7 +331,8 @@ Provide a complete trading thesis for this stock."""
         
         web_block = "\n".join([f"- {s}" for s in web_snippets]) if web_snippets else "No web snippets found."
 
-        system_prompt = """You are an elite intelligence analyst at Artillegence Intelligence.
+        system_prompt = f"""Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
+        You are an elite intelligence analyst at Artillegence Intelligence.
         A user has just added a new custom search topic to their live map radar.
         
         You will be given the user's custom tracking keyword, recent news headlines, and web search snippets.
