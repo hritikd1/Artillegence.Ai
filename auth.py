@@ -34,6 +34,21 @@ def init_db():
             hashed_password TEXT NOT NULL
         )
     ''')
+    
+    # Check if we need to seed the default admin
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM users")
+    if cur.fetchone()[0] == 0:
+        print("  [AUTH] No users found, seeding default admin...")
+        admin_email = "deores121@gmail.com"
+        # Admin@123
+        admin_pass = "$2b$12$ZpMgInoH9eBfI/v3I5w3Z.XnUfV9PjT.U6Xl.rT9G6v6CqI5H1qK6" # Admin@123 (hashed)
+        # We can also generate it if preferred, but hardcoding a known hash is safer for init
+        try:
+            cur.execute("INSERT INTO users (email, hashed_password) VALUES (?, ?)", (admin_email, admin_pass))
+        except Exception as e:
+            print(f"  [AUTH] Seeding failed: {e}")
+    
     conn.commit()
     conn.close()
 
