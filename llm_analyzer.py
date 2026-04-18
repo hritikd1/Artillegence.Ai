@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 import asyncio
+from datetime import datetime
+import time
 
 # Load environment variables
 load_dotenv()
@@ -16,49 +18,53 @@ class MistralAnalyzer:
         self.api_key = MISTRAL_API_KEY
         self.api_url = MISTRAL_API_URL
     
-    async def analyze_signal(self, text, context=None):
-        """Analyze a signal with Mistral AI"""
-        try:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Create a structured prompt with context if available
-            system_prompt = f'''
-            Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
-            You are an economic intelligence analyst specializing in Indian markets. 
-            Analyze the given information and provide exactly these sections with these exact headings:
-            
-            1. SUMMARY: A concise explanation of the news/event
-            2. SECTOR IMPACT: List specific sectors that will be affected (positive/negative)
-            3. STOCK RECOMMENDATIONS: Name 2-3 specific Indian stocks that could be impacted
-            4. CONFIDENCE: Rate your confidence in this analysis (Low/Medium/High)
-            '''
-            
-            user_message = f"Context: {context if context else 'None'}\n\nText to analyze: {text}"
-            
-            payload = {
-                'model': 'mistral-large-latest',
-                'messages': [
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_message}
-                ]
-            }
-            
-            import asyncio
-            import aiohttp
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.api_url, headers=headers, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data['choices'][0]['message']['content']
-                    else:
-                        error_text = await response.text()
-                        return f"Error from Mistral API: {error_text}"
-        except Exception as e:
-            return f"An error occurred during analysis: {e}"
+    async def analyze_signal(self, text, context=None, retries=3):
+        """Analyze a signal with Mistral AI and rate-limit protection."""
+        for attempt in range(retries):
+            try:
+                headers = {
+                    'Authorization': f'Bearer {self.api_key}',
+                    'Content-Type': 'application/json'
+                }
+                
+                system_prompt = f'''
+                Today's date is {datetime.now().strftime('%A, %B %d, %Y')}.
+                You are an economic intelligence analyst specializing in Indian markets. 
+                Analyze the given information and provide exactly these sections with these exact headings:
+                
+                1. SUMMARY: A concise explanation of the news/event
+                2. SECTOR IMPACT: List specific sectors that will be affected (positive/negative)
+                3. STOCK RECOMMENDATIONS: Name 2-3 specific Indian stocks that could be impacted
+                4. CONFIDENCE: Rate your confidence in this analysis (Low/Medium/High)
+                '''
+                
+                user_message = f"Context: {context if context else 'None'}\n\nText to analyze: {text}"
+                
+                payload = {
+                    'model': 'mistral-large-latest',
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_message}
+                    ]
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.api_url, headers=headers, json=payload, timeout=45) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            return data['choices'][0]['message']['content']
+                        elif response.status == 429:
+                            wait = (attempt + 1) * 5
+                            await asyncio.sleep(wait)
+                            continue
+                        else:
+                            error_text = await response.text()
+                            return f"Error from Mistral API: {error_text}"
+            except Exception as e:
+                if attempt == retries - 1:
+                    return f"An error occurred during analysis: {e}"
+                await asyncio.sleep(2)
+        return "Analysis timed out."
 
     async def extract_locations(self, posts_json_str):
         """Extract explicit geographical locations per telegram post using Mistral"""
@@ -270,7 +276,7 @@ Provide a complete trading thesis for this stock."""
                             "bias": bias,
                             "thesis": thesis_text,
                             "news_sources": news_items,
-                            "generated_at": datetime.utcnow().isoformat()
+                            "generated_at": datetime.now().isoformat()
                         }
                     else:
                         err = await response.text()

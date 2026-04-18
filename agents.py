@@ -3,6 +3,7 @@ import asyncio
 import json
 import re
 import aiohttp
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -36,41 +37,49 @@ def strip_markdown(text: str) -> str:
     return text.strip()
 
 
-async def call_mistral(prompt: str, system_msg: str | None = None) -> str:
-    """Call Mistral AI. Returns clean plain-text response."""
+async def call_mistral(prompt: str, system_msg: str | None = None, retries=3) -> str:
+    """Call Mistral AI with automatic retries and rate-limit protection."""
     default_system = (
         f"Today's date is {datetime.now().strftime('%A, %B %d, %Y')}. "
         "You are an expert Indian stock market analyst. "
         "CRITICAL RULES: "
-        "1) Never use markdown formatting like #, ##, **, ---, or tables. "
-        "2) Write in clean plain text with numbered lists and line breaks. "
-        "3) Be specific about stock names, sectors, and give actionable advice. "
-        "4) ONLY analyze based on the news headlines provided. Do NOT make up data or use your training data. "
-        "5) Always cite which headline you are referencing."
+        "1) Never use markdown formatting. "
+        "2) Write in clean plain text. "
+        "3) Cite headlines."
     )
-    try:
-        headers = {
-            'Authorization': f'Bearer {MISTRAL_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'model': 'mistral-large-latest',
-            'messages': [
-                {'role': 'system', 'content': system_msg or default_system},
-                {'role': 'user', 'content': prompt}
-            ]
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(MISTRAL_API_URL, headers=headers, json=payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    raw = data['choices'][0]['message']['content']
-                    return strip_markdown(raw)
-                else:
-                    error = await resp.text()
-                    return f"API error ({resp.status}): {error[:200]}"
-    except Exception as e:
-        return f"Analysis unavailable: {e}"
+    
+    for attempt in range(retries):
+        try:
+            headers = {
+                'Authorization': f'Bearer {MISTRAL_API_KEY}',
+                'Content-Type': 'application/json'
+            }
+            payload = {
+                'model': 'mistral-large-latest',
+                'messages': [
+                    {'role': 'system', 'content': system_msg or default_system},
+                    {'role': 'user', 'content': prompt}
+                ]
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(MISTRAL_API_URL, headers=headers, json=payload, timeout=45) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        raw = data['choices'][0]['message']['content']
+                        return strip_markdown(raw)
+                    elif resp.status == 429:
+                        wait = (attempt + 1) * 5
+                        print(f"   [RATE LIMIT] Mistral busy. Retrying in {wait}s...")
+                        await asyncio.sleep(wait)
+                        continue
+                    else:
+                        error = await resp.text()
+                        return f"API error ({resp.status}): {error[:200]}"
+        except Exception as e:
+            if attempt == retries - 1:
+                return f"Analysis unavailable: {e}"
+            await asyncio.sleep(2)
+    return "Analysis timed out after retries."
 
 
 async def broadcast(event: dict):
@@ -372,7 +381,7 @@ IMPORTANT: Base your analysis ONLY on these headlines. Cite the headline you are
             "timestamp": datetime.now().isoformat()
         })
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(5) # Cooldown to avoid 429 Rate Limits
 
     # Save full results to DB (replaces market_analysis.json)
     if results:
