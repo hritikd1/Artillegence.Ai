@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Scrapling and link Playwright Chromium
 # We split these to catch the exact error if one fails
 RUN playwright install chromium
-RUN python -m scrapling install
+RUN scrapling install
 
 # Copy application code
 COPY . .
