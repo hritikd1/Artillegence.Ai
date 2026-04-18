@@ -362,9 +362,9 @@ function App() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 glass-panel overflow-hidden" style={{ minHeight: '500px' }}>
             <Suspense fallback={
-              <div className="flex items-center justify-center h-full">
-                <Radio className="animate-pulse text-neonBlue" size={32} />
-                <span className="text-slate-500 ml-3">Loading Earth Map...</span>
+              <div className="flex flex-col items-center justify-center h-full bg-slate-900/20 backdrop-blur-sm">
+                <Globe className="animate-spin-slow text-neonBlue mb-4" size={48} />
+                <span className="text-neonBlue font-bold tracking-[0.2em] text-xs">DECODING 3D INTELLIGENCE GLOBE...</span>
               </div>
             }>
               <ParticleGlobe events={geoEvents} />
@@ -473,7 +473,7 @@ function App() {
           icon={<Lightbulb className="text-emerald-400" size={20} />}
           title="INVESTMENT OPPORTUNITIES" subtitle="AI-picked stocks based on cross-referenced analysis"
           accentColor="emerald" event={latestOpportunity} items={undefined}
-          placeholder="Opportunity Finder agent is analyzing markets..." fullWidth
+          placeholder="Artillegence AI is currently calculating multi-order impacts... signals appearing in ~60s." fullWidth
         />
 
         {/* Market Deep Dive / Stocks Today */}

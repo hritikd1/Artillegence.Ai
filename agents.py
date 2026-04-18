@@ -1050,7 +1050,7 @@ def get_agent_status():
 
 async def run_agent_loop(name: str, fn, interval_min: int):
     global agent_status
-    await asyncio.sleep(5)
+    # Removed initial sleep to speed up first-run intelligence population
     while True:
         try:
             agent_status[name]["status"] = "active"
