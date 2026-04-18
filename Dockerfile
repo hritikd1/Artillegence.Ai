@@ -1,52 +1,39 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# --- STAGE 1: Frontend Build ---
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
 
-# Install system dependencies for Playwright and Node.js
-# We use a comprehensive list to ensure Chromium runs without needing playwright install-deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    gnupg \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libxshmfence1 \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# --- STAGE 2: Final Runtime ---
+FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
 
-# Set the working directory
+# Set production environment
+ENV PYTHONUNBUFFERED=1
+ENV NODE_ENV=production
+
 WORKDIR /app
 
-# Copy application files
-COPY . .
-
-# Install Python dependencies
+# Copy python dependencies first for better caching
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Scrapling and Playwright Chromium
-# We explicitly avoid install-deps to prevent root switching issues on Render
+# Install Scrapling and ensure Playwright Chromium is linked
+# The base image already contains the browsers, but this ensures 
+# the Python environment is fully initialized.
 RUN playwright install chromium && \
     python -m scrapling install
 
-# Build the frontend
-RUN cd frontend && npm install && npm run build
+# Copy application code
+COPY . .
 
-# Expose the API port
+# Copy the built frontend from Stage 1
+# This replaces the local frontend/dist (if any) with the fresh build
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# Expose API port
 EXPOSE 8000
 
 # Start command
-# We use uvicorn directly to ensure logging is correctly handled by Render
 CMD ["python", "main.py"]
