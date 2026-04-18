@@ -37,17 +37,19 @@ def init_db():
     
     # Check if we need to seed the default admin
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM users")
-    if cur.fetchone()[0] == 0:
-        print("  [AUTH] No users found, seeding default admin...")
-        admin_email = "deores121@gmail.com"
-        # Admin@123
-        admin_pass = "$2b$12$ZpMgInoH9eBfI/v3I5w3Z.XnUfV9PjT.U6Xl.rT9G6v6CqI5H1qK6" # Admin@123 (hashed)
-        # We can also generate it if preferred, but hardcoding a known hash is safer for init
-        try:
-            cur.execute("INSERT INTO users (email, hashed_password) VALUES (?, ?)", (admin_email, admin_pass))
-        except Exception as e:
-            print(f"  [AUTH] Seeding failed: {e}")
+    admin_email = "deores121@gmail.com"
+    # Admin@123 (bcrypt hash)
+    admin_pass = "$2b$12$ZpMgInoH9eBfI/v3I5w3Z.XnUfV9PjT.U6Xl.rT9G6v6CqI5H1qK6"
+    
+    cur.execute("SELECT id FROM users WHERE email = ?", (admin_email,))
+    existing = cur.fetchone()
+    if not existing:
+        print("  [AUTH] No admin found, seeding default...")
+        cur.execute("INSERT INTO users (email, hashed_password) VALUES (?, ?)", (admin_email, admin_pass))
+    else:
+        # FORCE UPDATE: Ensure current password is Admin@123 for this restoration session
+        print("  [AUTH] Resetting admin credentials for restoration...")
+        cur.execute("UPDATE users SET hashed_password = ? WHERE email = ?", (admin_pass, admin_email))
     
     conn.commit()
     conn.close()
