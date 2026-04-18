@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "artillegence_super_secret_jwt_key_v2")
 if SECRET_KEY == "artillegence_super_secret_jwt_key_v2":
-    print("⚠️  [AUTH] WARNING: Using default JWT_SECRET_KEY — set JWT_SECRET_KEY in .env for production!")
+    print("  [AUTH] WARNING: Using default JWT_SECRET_KEY  set JWT_SECRET_KEY in .env for production!")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
 
@@ -67,7 +67,7 @@ def require_auth(
     credentials: HTTPAuthorizationCredentials = Security(_bearer_scheme)
 ) -> dict:
     """
-    FastAPI dependency — validates the Bearer JWT and returns the payload.
+    FastAPI dependency  validates the Bearer JWT and returns the payload.
     Raises HTTP 401 if the token is missing, expired, or invalid.
     """
     if credentials is None:
@@ -77,7 +77,7 @@ def require_auth(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired — please log in again")
+        raise HTTPException(status_code=401, detail="Token expired  please log in again")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -106,8 +106,14 @@ def login(user: UserLogin):
     db_user = cur.fetchone()
     conn.close()
 
-    if not db_user or not verify_password(user.password, db_user["hashed_password"]):
+    if not db_user:
+        print(f"  [AUTH] Login failed: User not found for {user.email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
+    if not verify_password(user.password, db_user["hashed_password"]):
+        print(f"  [AUTH] Login failed: Incorrect password for {user.email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    print(f"  [AUTH] Login success: {user.email}")
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}

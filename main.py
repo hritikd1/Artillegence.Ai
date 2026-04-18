@@ -8,19 +8,19 @@ load_dotenv()
 
 async def main():
     print("=" * 60)
-    print("🧠 STOCK INTELLIGENCE SYSTEM — MASTER ORCHESTRATOR")
+    print("MASTER ORCHESTRATOR - ARTILLEGENCE AI")
     print("=" * 60)
     print()
     print("  Agents:")
-    print("    🔍 News Scanner         — every 5 min")
-    print("    📊 Market Analyzer      — every 30 min")
-    print("    💡 Opportunity Finder   — every 30 min")
-    print("    🔥 Trending Tracker     — every 15 min")
-    print("    🇮🇳 Indian Market Tracker — every 10 min")
-    print("    💬 Telegram Scanner     — every 5 min")
-    print("    🔬 Visual Researcher    — every 20 min")
-    print("    📰 Google News Scanner  — every 10 min (60+ topics, all categories)")
-    print("    📈 Google Trends Tracker — every 20 min (search spike detection)")
+    print("    News Scanner           - every 5 min")
+    print("    Market Analyzer        - every 30 min")
+    print("    Opportunity Finder     - every 30 min")
+    print("    Trending Tracker       - every 15 min")
+    print("    Indian Market Tracker  - every 10 min")
+    print("    Telegram Scanner       - every 5 min")
+    print("    Visual Researcher      - every 20 min")
+    print("    Google News Scanner    - every 10 min")
+    print("    Google Trends Tracker  - every 20 min")
     print()
     print("  API Server: http://localhost:8000")
     print("  Dashboard:  http://localhost:3000")
@@ -42,11 +42,11 @@ async def main():
             start_all_agents(),
         )
     except KeyboardInterrupt:
-        print("\n⚠️ Shutting down system...")
+        print("\nShutting down system...")
     except Exception as e:
-        print(f"\n❌ System error: {e}")
+        print(f"\nSystem error: {e}")
     finally:
-        print("🛑 System stopped.")
+        print("System stopped.")
 
 if __name__ == '__main__':
     asyncio.run(main())

@@ -1,11 +1,11 @@
 """
-database.py — Artillegence AI Central Database Layer
+database.py  Artillegence AI Central Database Layer
 Replaces all ad-hoc JSON file reads/writes with atomic SQLite operations.
 Tables:
   - intelligence_cache   : latest output per agent (replaces *.json files)
   - geo_events           : persistent geo-tagged events (survives restarts)
   - signal_log           : AI signal accuracy tracking (replaces signal_log.json)
-  - agent_memory         : rolling context summaries per agent (new — #5)
+  - agent_memory         : rolling context summaries per agent (new  #5)
 """
 
 import sqlite3
@@ -21,7 +21,7 @@ if os.path.exists("/data"):
 else:
     DB_PATH = os.path.join(os.path.dirname(__file__), "artillegence.db")
 
-# ── Connection helper ──────────────────────────────────────────────────────
+#  Connection helper 
 
 @contextmanager
 def get_conn():
@@ -39,7 +39,7 @@ def get_conn():
         conn.close()
 
 
-# ── Schema Init ────────────────────────────────────────────────────────────
+#  Schema Init 
 
 def init_db():
     """Create all tables if they don't exist. Safe to call on every startup."""
@@ -84,10 +84,10 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
         """)
-    print("✅ [DB] Artillegence database initialised at", DB_PATH)
+    print("[DB] Artillegence database initialised at", DB_PATH)
 
 
-# ── Intelligence Cache ─────────────────────────────────────────────────────
+#  Intelligence Cache 
 
 def save_intelligence(agent: str, data: dict):
     """Upsert the latest data for an agent."""
@@ -135,7 +135,7 @@ def get_all_intelligence() -> dict:
     return result
 
 
-# ── Geo Events ─────────────────────────────────────────────────────────────
+#  Geo Events 
 
 def save_geo_events(events: list):
     """Upsert a batch of geo events. Keeps the 200 most recent."""
@@ -178,7 +178,7 @@ def get_geo_events(limit: int = 200) -> list:
     return result
 
 
-# ── Signal Log ─────────────────────────────────────────────────────────────
+#  Signal Log 
 
 def log_signal(agent: str, signal_type: str, target: str,
                direction: str, confidence: str, reasoning: str = ""):
@@ -233,7 +233,7 @@ def get_signal_scorecard() -> dict:
     }
 
 
-# ── Agent Memory (#5) ──────────────────────────────────────────────────────
+#  Agent Memory (#5) 
 
 def append_agent_memory(agent: str, summary: str):
     """Add a cycle summary to agent memory. Keeps only the last 10 per agent."""
@@ -277,9 +277,9 @@ def build_memory_context(agent: str) -> str:
     return (
         "\n\n=== YOUR LAST FEW CYCLE SUMMARIES (for trend awareness) ===\n"
         f"{lines}\n"
-        "=== END OF MEMORY — use only the headlines below for NEW analysis ===\n"
+        "=== END OF MEMORY  use only the headlines below for NEW analysis ===\n"
     )
 
 
-# ── Bootstrap on import ────────────────────────────────────────────────────
+#  Bootstrap on import 
 init_db()

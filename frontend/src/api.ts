@@ -7,7 +7,7 @@
  *  3. Redirects to /login on 401 (expired/invalid token)
  */
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = '';  // Vite proxies /api/* → http://localhost:8000
 
 /** Low-level authenticated fetch. Throws on network errors; returns parsed JSON. */
 export async function apiFetch<T = unknown>(
@@ -30,11 +30,13 @@ export async function apiFetch<T = unknown>(
     headers,
   });
 
-  // Token expired or invalid → bounce to login
+  // Token expired or invalid — clear token and throw. 
+  // Individual components (like App.tsx) will handle the redirect if needed.
   if (response.status === 401) {
     localStorage.removeItem('token');
-    window.location.href = '/login';
-    throw new Error('Unauthorized — redirecting to login');
+    // We explicitly avoid window.location.replace here so that the Landing Page
+    // can mount ParticleGlobe even if the existing token is invalid.
+    throw new Error('Unauthorized');
   }
 
   return response.json() as Promise<T>;

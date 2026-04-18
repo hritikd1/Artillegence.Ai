@@ -5,16 +5,14 @@ services:
     envVars:
       - key: PORT
         value: 8000
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: NODE_VERSION
-        value: 20.0.0
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: MISTRAL_API_KEY
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: VITE_API_URL
+        value: "" # Leave empty for same-origin proxying in Docker
     disk:
       name: artillegence-data
       mountPath: /data

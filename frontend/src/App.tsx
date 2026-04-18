@@ -127,16 +127,21 @@ function App() {
   const [chainResult, setChainResult] = useState<any>(null);
   const [chainInput, setChainInput] = useState('');
   const [chainLoading, setChainLoading] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Authentication check
+  // Authentication check — run once on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/login');
+      console.log('[AUTH] No token found, redirecting to login from Dashboard');
+      navigate('/login', { replace: true });
+    } else {
+      console.log('[AUTH] Token found, validating session...');
+      setAuthChecked(true);
     }
   }, [navigate]);
 
-  // Buffer WS events
+  // Buffer WS events — ALL hooks must be declared before any early return!
   const eventBufferRef = useRef<LiveEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flushBuffer = useCallback(() => {
@@ -148,14 +153,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!authChecked) return;
     flushTimerRef.current = setInterval(flushBuffer, 500);
     return () => { if (flushTimerRef.current) clearInterval(flushTimerRef.current); };
-  }, [flushBuffer]);
+  }, [flushBuffer, authChecked]);
 
   useEffect(() => {
+    if (!authChecked) return;
     const token = localStorage.getItem('token');
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.host;
     const ws = new WebSocket(
-      `ws://localhost:8000/ws${token ? `?token=${token}` : ''}`
+      `${wsProtocol}//${wsHost}/ws${token ? `?token=${token}` : ''}`
     );
     ws.onopen = () => setConnected(true);
     ws.onmessage = (msg) => {
@@ -164,7 +173,6 @@ function App() {
         if (data.type === 'geo_events_update') {
           setGeoEvents(data.events as GeoEvent[]);
         } else if (data.type === 'geo_event') {
-          // Legacy support: ignore or handle safely
           setGeoEvents(prev => {
             const exists = prev.some(e => e.id === data.id);
             if (exists) return prev.map(e => e.id === data.id ? data as GeoEvent : e);
@@ -178,10 +186,11 @@ function App() {
     ws.onclose = () => setConnected(false);
     ws.onerror = () => setConnected(false);
     return () => ws.close();
-  }, []);
+  }, [authChecked]);
 
   // Load initial geo events
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try {
         const data = await apiGet<any>('/api/geo/events');
@@ -189,17 +198,19 @@ function App() {
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 30000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try { setAgents(await apiGet<any>('/api/agents/status')); }
       catch { /* */ }
     };
     poll(); const id = setInterval(poll, 10000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try {
         const data = await apiGet<any>('/api/market/analysis');
@@ -207,9 +218,10 @@ function App() {
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try {
         const data = await apiGet<any>('/api/telegram/status');
@@ -217,10 +229,11 @@ function App() {
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   // Fetch Google Trends data
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try {
         const data = await apiGet<any>('/api/google-trends');
@@ -228,10 +241,11 @@ function App() {
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   // Fetch Signal scorecard
   useEffect(() => {
+    if (!authChecked) return;
     const poll = async () => {
       try {
         const data = await apiGet<any>('/api/signals');
@@ -239,7 +253,7 @@ function App() {
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 30000); return () => clearInterval(id);
-  }, []);
+  }, [authChecked]);
 
   // Event Chain Prediction handler
   const handlePredictChain = async () => {
@@ -258,6 +272,7 @@ function App() {
 
   // Fetch initial widget states on mount
   useEffect(() => {
+    if (!authChecked) return;
     const loadWidgets = async () => {
       try {
         const [optRes, trdRes, indRes] = await Promise.all([
@@ -281,7 +296,10 @@ function App() {
       } catch { /* ignore */ }
     };
     loadWidgets();
-  }, []);
+  }, [authChecked]);
+
+  // ── Guard: Don't render dashboard until auth is confirmed ──
+  if (!authChecked) return null;
 
   const latestNewsScan = [...events].reverse().find(e => e.agent === 'news_scanner');
   const latestTrending = [...events].reverse().find(e => e.agent === 'trending_tracker');

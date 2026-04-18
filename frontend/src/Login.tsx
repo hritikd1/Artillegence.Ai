@@ -22,7 +22,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       const endpoint = isLoginMode ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })

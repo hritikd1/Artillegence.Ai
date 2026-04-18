@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API credentials
-# API credentials — Only non-public scrapers would need keys.
+# API credentials  Only non-public scrapers would need keys.
 # (Dynamic scrapers below use public RSS or web previews and require NO keys).
 
 class WebScraper:
@@ -79,9 +79,9 @@ class NewsSource:
     def filter_by_date(self, articles, hours=6):
         """
         Filter articles to only include those published within `hours` hours.
-        • Handles both naive and timezone-aware ISO timestamps.
-        • Articles with no parseable date are DROPPED (not silently passed).
-        • Results are sorted newest-first so callers always get the freshest slice.
+         Handles both naive and timezone-aware ISO timestamps.
+         Articles with no parseable date are DROPPED (not silently passed).
+         Results are sorted newest-first so callers always get the freshest slice.
         """
         now_utc = datetime.now(timezone.utc)
         cutoff = hours * 3600
@@ -106,7 +106,7 @@ class NewsSource:
                 else:
                     dropped += 1
             except (ValueError, TypeError, AttributeError):
-                dropped += 1   # Bad timestamp → reject
+                dropped += 1   # Bad timestamp  reject
 
         if dropped:
             print(f"    [FRESHNESS] {dropped} articles older than {hours}h dropped, {len(kept)} kept")
@@ -198,18 +198,18 @@ class GoogleRSSFeed(NewsSource):
         return filtered[:limit]
 
 
-# ═══════════════════════════════════════════════════
+# 
 # Google News RSS Scraper (news.google.com)
-# ═══════════════════════════════════════════════════
+# 
 
-# ═══════════════════════════════════════════════════
+# 
 # Comprehensive topic list the agent rotates through
 # Covers ALL Google News homepage categories for India
 # URL: https://news.google.com/home?hl=en-IN&gl=IN&ceid=IN:en
-# ═══════════════════════════════════════════════════
+# 
 
 GOOGLE_NEWS_TOPICS = [
-    # ── Market & Indices ──
+    #  Market & Indices 
     ("Nifty 50",              "Nifty 50 today"),
     ("Sensex",                "Sensex today"),
     ("Bank Nifty",            "Bank Nifty today"),
@@ -217,7 +217,7 @@ GOOGLE_NEWS_TOPICS = [
     ("Nifty IT",              "Nifty IT index today"),
     ("Nifty Pharma",          "Nifty Pharma index today"),
 
-    # ── Sectors ──
+    #  Sectors 
     ("IT Sector",             "Indian IT sector stocks TCS Infosys Wipro HCL"),
     ("Banking Sector",        "India banking sector HDFC ICICI SBI Kotak"),
     ("Pharma Sector",         "pharma stocks India Sun Pharma Cipla Dr Reddy"),
@@ -233,7 +233,7 @@ GOOGLE_NEWS_TOPICS = [
     ("Semiconductors",        "semiconductor chips India manufacturing"),
     ("Green Energy",          "renewable energy solar wind India stocks"),
 
-    # ── Economy & Policy ──
+    #  Economy & Policy 
     ("RBI Policy",            "RBI monetary policy interest rate India"),
     ("India GDP",             "India GDP growth economic data"),
     ("Rupee Dollar",          "Indian rupee dollar exchange rate"),
@@ -243,18 +243,18 @@ GOOGLE_NEWS_TOPICS = [
     ("India Trade",           "India exports imports trade deficit"),
     ("India Taxation",        "India income tax capital gains tax"),
 
-    # ── Institutional Activity ──
+    #  Institutional Activity 
     ("FII Activity",          "FII foreign institutional investors India"),
     ("DII Mutual Funds",      "DII mutual fund inflows India SIP"),
     ("Retail Investors",      "retail investors India demat accounts"),
 
-    # ── Commodities ──
+    #  Commodities 
     ("Crude Oil",             "crude oil price impact India"),
     ("Gold Price",            "gold price India MCX"),
     ("Silver Price",          "silver price India commodity"),
     ("Copper Aluminium",      "copper aluminium prices India"),
 
-    # ── Global Impact ──
+    #  Global Impact 
     ("US Fed",                "US Federal Reserve impact India markets"),
     ("China Economy",         "China economy impact Asia markets"),
     ("Global Markets",        "global stock markets today"),
@@ -263,28 +263,28 @@ GOOGLE_NEWS_TOPICS = [
     ("Japan Economy",         "Japan Nikkei Bank of Japan markets"),
     ("Europe Markets",        "European markets economy impact India"),
 
-    # ── Opportunities ──
+    #  Opportunities 
     ("IPO News",              "upcoming IPO India 2026"),
     ("Breakout Stocks",       "breakout stocks India technical analysis"),
     ("Small Mid Cap",         "small cap mid cap multibagger India"),
     ("Dividend Stocks",       "high dividend yield stocks India"),
     ("Penny Stocks",          "penny stocks India NSE BSE"),
 
-    # ── Breaking / General Market ──
+    #  Breaking / General Market 
     ("Market Crash Rally",    "stock market crash OR rally India"),
     ("Corporate Earnings",    "quarterly results earnings India"),
     ("Block Deals",           "block deal bulk deal India NSE"),
     ("SEBI Regulations",      "SEBI new regulations India market"),
     ("Insider Trading",       "insider trading promoter buying India"),
 
-    # ── India News (Top Headline Categories) ──
+    #  India News (Top Headline Categories) 
     ("India Politics",        "India politics government parliament"),
     ("India Elections",       "India elections results assembly"),
     ("India Infrastructure",  "India infrastructure highway metro project"),
     ("India Startups",        "India startup funding unicorn"),
     ("India Technology",      "India technology AI digital"),
 
-    # ── Geopolitics (Market-moving) ──
+    #  Geopolitics (Market-moving) 
     ("Iran Oil Crisis",       "Iran war Strait Hormuz oil India"),
     ("US China Trade",        "US China trade war tariffs India"),
     ("OPEC Oil",              "OPEC oil production cut India"),
@@ -298,15 +298,15 @@ class GoogleNewsScraper(NewsSource):
     """
     Scrapes the *real* Google News RSS feed.
     URL pattern:
-      Top stories  → https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en
-      Search query → https://news.google.com/rss/search?q=<query>&hl=en-IN&gl=IN&ceid=IN:en
-      Topic        → https://news.google.com/rss/topics/<TOPIC_TOKEN>?hl=en-IN&gl=IN&ceid=IN:en
+      Top stories   https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en
+      Search query  https://news.google.com/rss/search?q=<query>&hl=en-IN&gl=IN&ceid=IN:en
+      Topic         https://news.google.com/rss/topics/<TOPIC_TOKEN>?hl=en-IN&gl=IN&ceid=IN:en
     """
 
     # Google News topic tokens scraped from live homepage:
     # https://news.google.com/home?hl=en-IN&gl=IN&ceid=IN:en
     TOPIC_TOKENS = {
-        "top_stories":    None,  # no path → homepage RSS
+        "top_stories":    None,  # no path  homepage RSS
         "india":          "CAAqJQgKIh9DQkFTRVFvSUwyMHZNRE55YXpBU0JXVnVMVWRDS0FBUAE",
         "world":          "CAAqKggKIiRDQkFTRlFvSUwyMHZNRGx1YlY4U0JXVnVMVWRDR2dKSlRpZ0FQAQ",
         "local":          "CAAqHAgKIhZDQklTQ2pvSWJHOWpZV3hmZGpJb0FBUAE",
@@ -350,14 +350,14 @@ class GoogleNewsScraper(NewsSource):
         try:
             feed = await asyncio.to_thread(feedparser.parse, self.feed_url)
             for entry in feed.entries:
-                # ── Timestamp ──
+                #  Timestamp 
                 timestamp = datetime.now().isoformat()
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
                     timestamp = datetime.fromtimestamp(time.mktime(entry.published_parsed)).isoformat()
                 elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
                     timestamp = datetime.fromtimestamp(time.mktime(entry.updated_parsed)).isoformat()
 
-                # ── Description / image ──
+                #  Description / image 
                 image_url = ''
                 description_text = ''
                 if hasattr(entry, 'description') and entry.description:
@@ -382,7 +382,7 @@ class GoogleNewsScraper(NewsSource):
                 raw_link = entry.link
                 if 'news.google.com' in raw_link and '/articles/' in raw_link:
                     # Can't always unwrap Google redirect without following it,
-                    # so keep the Google link — it still works for readers.
+                    # so keep the Google link  it still works for readers.
                     pass
                 elif 'url=' in raw_link:
                     try:
@@ -540,7 +540,7 @@ class GoogleTrendsScraper:
         """
         Fetch relative search interest for given keywords over the specified timeframe.
         Returns a list of dicts with keyword, current_interest, avg_interest, spike_ratio.
-        A spike_ratio > 2.0 means search interest is 2x the 7-day average — a notable spike.
+        A spike_ratio > 2.0 means search interest is 2x the 7-day average  a notable spike.
         """
         kw_list = keywords or self.keywords[:5]  # pytrends max 5 keywords per request
         results = []
@@ -578,7 +578,7 @@ class GoogleTrendsScraper:
                     
                     await asyncio.sleep(1)  # Rate limit courtesy
                 except Exception as e:
-                    print(f"  ⚠ Google Trends batch error: {e}")
+                    print(f"   Google Trends batch error: {e}")
                     
         except Exception as e:
             print(f"Error in Google Trends interest fetch: {e}")
@@ -586,7 +586,7 @@ class GoogleTrendsScraper:
         return sorted(results, key=lambda x: x.get("spike_ratio", 0), reverse=True)
 
     async def fetch_related_queries(self, keyword: str) -> dict:
-        """Fetch rising and top related queries for a keyword — useful for discovering what retail investors are searching."""
+        """Fetch rising and top related queries for a keyword  useful for discovering what retail investors are searching."""
         try:
             from pytrends.request import TrendReq
             pytrend = await asyncio.to_thread(TrendReq, hl='en-IN', tz=330)

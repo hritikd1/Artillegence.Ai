@@ -272,10 +272,10 @@ Provide a complete trading thesis for this stock."""
                     else:
                         err = await response.text()
                         print(f"Mistral Stock Analysis Error: {err}")
-                        return {"symbol": symbol, "bias": "NEUTRAL", "thesis": f"⚠️ Mistral API error: {err[:200]}", "news_sources": news_items, "generated_at": ""}
+                        return {"symbol": symbol, "bias": "NEUTRAL", "thesis": f" Mistral API error: {err[:200]}", "news_sources": news_items, "generated_at": ""}
         except Exception as e:
             print(f"Stock analysis exception: {e}")
-            return {"symbol": symbol, "bias": "NEUTRAL", "thesis": f"⚠️ Analysis failed: {str(e)}", "news_sources": news_items, "generated_at": ""}
+            return {"symbol": symbol, "bias": "NEUTRAL", "thesis": f" Analysis failed: {str(e)}", "news_sources": news_items, "generated_at": ""}
 
     async def analyze_custom_search(self, query: str) -> dict:
         """
@@ -396,7 +396,7 @@ Provide a complete trading thesis for this stock."""
                     else:
                         err = await response.text()
                         print(f"Mistral Custom Analysis Error: {err}")
-                        return {"query": query, "headline": f"Monitoring: {query}", "thesis": f"⚠️ Mistral API error: {err[:200]}", "news_sources": news_items}
+                        return {"query": query, "headline": f"Monitoring: {query}", "thesis": f" Mistral API error: {err[:200]}", "news_sources": news_items}
         except Exception as e:
             print(f"Custom analysis exception: {e}")
-            return {"query": query, "headline": f"Monitoring: {query}", "thesis": f"⚠️ Analysis failed: {str(e)}", "news_sources": news_items}
+            return {"query": query, "headline": f"Monitoring: {query}", "thesis": f" Analysis failed: {str(e)}", "news_sources": news_items}

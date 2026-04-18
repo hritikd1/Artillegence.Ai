@@ -1,5 +1,5 @@
 """
-Groq Vision Agent — autonomous chart analysis using Groq's official API.
+Groq Vision Agent  autonomous chart analysis using Groq's official API.
 Uses 'meta-llama/llama-4-scout-17b-16e-instruct' for image understanding of TradingView chart screenshots.
 """
 import os
@@ -289,7 +289,7 @@ All price levels should use actual values visible on the chart's Y-axis."""
             "target_1": "N/A",
             "target_2": "",
             "risk_reward": "N/A",
-            "commentary": f"⚠️ Vision analysis failed: {error}",
+            "commentary": f" Vision analysis failed: {error}",
             "confidence": "LOW",
             "analyzed_at": datetime.utcnow().isoformat(),
             "source": self.model,

@@ -15,7 +15,7 @@ load_dotenv()
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
 MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
 
-# ── Utility ──
+#  Utility 
 
 def strip_markdown(text: str) -> str:
     """Remove markdown formatting from text so the UI displays cleanly."""
@@ -73,9 +73,9 @@ async def broadcast(event: dict):
                 "http://localhost:8000/api/webhook/agent_event", json=event
             ) as resp:
                 if resp.status == 200:
-                    print(f"  ✅ Broadcasted to dashboard")
+                    print(f"   Broadcasted to dashboard")
     except Exception as e:
-        print(f"  ⚠ Dashboard not reachable: {e}")
+        print(f"   Dashboard not reachable: {e}")
 
 
 async def fetch_rss(topics: list, limit=5, hours=6) -> list:
@@ -87,7 +87,7 @@ async def fetch_rss(topics: list, limit=5, hours=6) -> list:
             data = await src.fetch_data(limit=limit, hours=hours)
             articles.extend(data)
         except Exception as e:
-            print(f"  ⚠ RSS {name}: {e}")
+            print(f"   RSS {name}: {e}")
     return articles
 
 
@@ -100,7 +100,7 @@ async def fetch_google_news(topics: list, limit=5, hours=6) -> list:
             data = await src.fetch_data(limit=limit, hours=hours)
             articles.extend(data)
         except Exception as e:
-            print(f"  ⚠ Google News {name}: {e}")
+            print(f"   Google News {name}: {e}")
     return articles
 
 
@@ -113,7 +113,7 @@ async def fetch_google_news_topics(topic_keys: list, limit=10, hours=6) -> list:
             data = await src.fetch_data(limit=limit, hours=hours)
             articles.extend(data)
         except Exception as e:
-            print(f"  ⚠ Google News topic {key}: {e}")
+            print(f"   Google News topic {key}: {e}")
     return articles
 
 
@@ -139,9 +139,9 @@ def make_source_list(articles: list, limit: int = 5) -> list:
     } for a in articles[:limit]]
 
 
-# ═══════════════════════════════════════
+# 
 # Section definitions for Market Analyzer
-# ═══════════════════════════════════════
+# 
 
 ANALYSIS_SECTIONS = {
     'market_overview': {
@@ -224,12 +224,12 @@ ANALYSIS_SECTIONS = {
 }
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 1: News Scanner (every 5 min)
-# ═══════════════════════════════════════
+# 
 
 async def news_scanner_cycle():
-    print("\n🔍 [NEWS SCANNER] Starting cycle...")
+    print("\n [NEWS SCANNER] Starting cycle...")
 
     topics = [
         ("Stock Market", "Indian stock market today"),
@@ -251,7 +251,7 @@ async def news_scanner_cycle():
     unique = deduplicate(all_articles)[:25]
 
     if not unique:
-        print("  ❌ No articles found")
+        print("   No articles found")
         return
 
     headlines = "\n".join([f"- {a['title']} ({a.get('source', 'Unknown')})" for a in unique])
@@ -290,29 +290,29 @@ IMPORTANT: Only reference information from these headlines. Do not use your trai
     # Persist to DB
     db.save_intelligence("news_scanner", payload)
 
-    print(f"  ✅ [NEWS SCANNER] {len(unique)} articles → summary broadcasted & saved to DB")
+    print(f"   [NEWS SCANNER] {len(unique)} articles  summary broadcasted & saved to DB")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 2: Market Analyzer (every 2 hr)
-# ═══════════════════════════════════════
+# 
 
 async def market_analyzer_cycle():
-    print("\n📊 [MARKET ANALYZER] Starting comprehensive analysis...")
+    print("\n [MARKET ANALYZER] Starting comprehensive analysis...")
 
     results = {}
 
     for section_name, section_data in ANALYSIS_SECTIONS.items():
         display_name = section_name.replace('_', ' ').title()
-        print(f"  📈 {display_name}...")
+        print(f"   {display_name}...")
 
         articles = await fetch_rss(
             [(display_name, t) for t in section_data['terms']],
-            limit=5, hours=8   # Market analyzer runs every 30 min — 8 h is safe
+            limit=5, hours=8   # Market analyzer runs every 30 min  8 h is safe
         )
 
         if not articles:
-            print(f"    ⚠ No data, skipping")
+            print(f"     No data, skipping")
             continue
 
         news_text = "\n".join([
@@ -357,15 +357,15 @@ IMPORTANT: Base your analysis ONLY on these headlines. Cite the headline you are
         db.save_intelligence("market_analyzer_full", results)
 
 
-    print(f"  ✅ [MARKET ANALYZER] Completed {len(results)} sections, saved to DB")
+    print(f"   [MARKET ANALYZER] Completed {len(results)} sections, saved to DB")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 3: Opportunity Finder (every 2 hr)
-# ═══════════════════════════════════════
+# 
 
 async def opportunity_finder_cycle():
-    print("\n💡 [OPPORTUNITY FINDER] Searching...")
+    print("\n [OPPORTUNITY FINDER] Searching...")
 
     topics = [
         ("Undervalued", "undervalued stocks India"),
@@ -416,15 +416,15 @@ IMPORTANT: Only cite information from these headlines. Write in plain text only.
     })
 
 
-    print("  ✅ [OPPORTUNITY FINDER] Complete")
+    print("   [OPPORTUNITY FINDER] Complete")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 4: Trending Tracker (every 15 min)
-# ═══════════════════════════════════════
+# 
 
 async def trending_tracker_cycle():
-    print("\n🔥 [TRENDING TRACKER] Scanning trends...")
+    print("\n [TRENDING TRACKER] Scanning trends...")
 
     topics = [
         ("Market Today", "stock market India today"),
@@ -443,7 +443,7 @@ async def trending_tracker_cycle():
 
     if not unique:
         # Fallback: try broader terms
-        print("  ⚠ No trending data from first pass, trying broader terms...")
+        print("   No trending data from first pass, trying broader terms...")
         fallback_topics = [
             ("Market", "India market"),
             ("Stocks", "stocks India"),
@@ -453,10 +453,10 @@ async def trending_tracker_cycle():
         unique = deduplicate(articles)[:15]
 
     if not unique:
-        print("  ❌ No trending data found even with fallback")
+        print("   No trending data found even with fallback")
         await broadcast({
             "agent": "trending_tracker",
-            "title": "Trending — Waiting for Data",
+            "title": "Trending  Waiting for Data",
             "summary": "The trending tracker is waiting for fresh market news. This section will update automatically when new stories come in.",
             "trending_items": [],
             "timestamp": datetime.now().isoformat()
@@ -473,10 +473,10 @@ Headlines:
 {headlines}
 
 Write your response covering:
-1) TOP 3 TRENDING TOPICS — what everyone is talking about (cite the headlines)
-2) TRENDING STOCKS — which stocks are making moves and why
-3) MARKET MOVERS — biggest gainers and losers
-4) TREND OUTLOOK — which trends could have lasting impact
+1) TOP 3 TRENDING TOPICS  what everyone is talking about (cite the headlines)
+2) TRENDING STOCKS  which stocks are making moves and why
+3) MARKET MOVERS  biggest gainers and losers
+4) TREND OUTLOOK  which trends could have lasting impact
 
 IMPORTANT: Only reference these headlines. Write in plain text, no markdown."""
 
@@ -502,15 +502,15 @@ IMPORTANT: Only reference these headlines. Write in plain text, no markdown."""
     db.save_intelligence("trending_tracker", payload)
 
 
-    print(f"  ✅ [TRENDING TRACKER] {len(unique)} items found, saved to DB")
+    print(f"   [TRENDING TRACKER] {len(unique)} items found, saved to DB")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 5: Indian Market Tracker (every 10 min)
-# ═══════════════════════════════════════
+# 
 
 async def indian_market_tracker_cycle():
-    print("\n🇮🇳 [INDIAN MARKET TRACKER] Tracking...")
+    print("\n [INDIAN MARKET TRACKER] Tracking...")
 
     topics = [
         ("Nifty", "Nifty 50 today"),
@@ -528,7 +528,7 @@ async def indian_market_tracker_cycle():
     unique = deduplicate(articles)[:20]
 
     if not unique:
-        print("  ❌ No Indian market data found")
+        print("   No Indian market data found")
         return
 
     headlines = "\n".join([f"- {a['title']} ({a.get('source', 'Unknown')})" for a in unique])
@@ -572,14 +572,14 @@ IMPORTANT: Only cite these headlines. Write in plain text, no markdown."""
     db.save_intelligence("indian_market_tracker", payload)
 
 
-    print("✅ [INDIAN MARKET TRACKER] Complete, saved to DB")
+    print(" [INDIAN MARKET TRACKER] Complete, saved to DB")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 6: Telegram Scanner (Provides raw events to extraction webhook)
-# ═══════════════════════════════════════
+# 
 async def telegram_scanner_cycle():
-    print("\n💬 [TELEGRAM RAW SCANNER] Fetching live intel...")
+    print("\n [TELEGRAM RAW SCANNER] Fetching live intel...")
     try:
         channels = ["CIG_telegram", "idfofficial", "rnintel", "QudsNen", "wfwitness"]
         all_tg_data = []
@@ -590,14 +590,14 @@ async def telegram_scanner_cycle():
                 if data:
                     all_tg_data.extend(data)
             except Exception as e:
-                print(f"  ⚠ Error scraping {ch}: {e}")
+                print(f"   Error scraping {ch}: {e}")
                 
         # Sort by timestamp descending to get the absolute newest intel across all channels
         all_tg_data.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         tg_data = all_tg_data[:25]  # Keep to 25 absolute latest so Mistral doesn't timeout
         
         if not tg_data:
-            print("  ❌ No Telegram data found")
+            print("   No Telegram data found")
             return
             
         news_items = [{
@@ -623,7 +623,7 @@ async def telegram_scanner_cycle():
                 clean_json = geo_data_raw.replace('```json', '').replace('```', '').strip()
                 mistral_data = json.loads(clean_json)
             except Exception as e:
-                print(f"  ❌ Error parsing Mistral JSON: {e}")
+                print(f"   Error parsing Mistral JSON: {e}")
                 
         # To maintain backwards compatibility of the payload (or if needed), we could join snippets as summary
         combined_text = " | ".join([a.get('snippet', '') for a in tg_data])
@@ -640,9 +640,9 @@ async def telegram_scanner_cycle():
         db.save_intelligence("telegram_scanner", event_payload)
 
 
-        print(f"  ✅ [TELEGRAM RAW SCANNER] {len(tg_data)} intel messages broadcasted & saved to DB")
+        print(f"   [TELEGRAM RAW SCANNER] {len(tg_data)} intel messages broadcasted & saved to DB")
     except Exception as e:
-        print(f"❌ Telegram pipeline error: {e}")
+        print(f" Telegram pipeline error: {e}")
 
 async def visual_research_cycle():
     """Autonomous Visual Web Researcher"""
@@ -694,12 +694,12 @@ async def visual_research_cycle():
         await post_to_api("api_logs", payload)
         print(f"[VISUAL RESEARCH] Intelligence logged to EarthMap.")
     except Exception as e:
-        print(f"❌ Visual Research Error: {e}")
+        print(f" Visual Research Error: {e}")
 
-# ═══════════════════════════════════════
+# 
 # AGENT 7: Google News Scanner (every 10 min)
 # Rotates through GOOGLE_NEWS_TOPICS list
-# ═══════════════════════════════════════
+# 
 
 # Track which batch of topics to query next (rotates across cycles)
 _gn_batch_index = 0
@@ -707,7 +707,7 @@ _gn_batch_index = 0
 async def google_news_scanner_cycle():
     """Dedicated Google News agent that rotates through the master topic list."""
     global _gn_batch_index
-    print("\n📰 [GOOGLE NEWS SCANNER] Starting cycle...")
+    print("\n [GOOGLE NEWS SCANNER] Starting cycle...")
 
     batch_size = 8  # topics per cycle to avoid rate-limiting
     topics = GOOGLE_NEWS_TOPICS
@@ -717,7 +717,7 @@ async def google_news_scanner_cycle():
         batch += topics[:batch_size - len(batch)]  # wrap around
     _gn_batch_index += batch_size
 
-    print(f"  📋 Topics this cycle: {[t[0] for t in batch]}")
+    print(f"   Topics this cycle: {[t[0] for t in batch]}")
 
     # Also grab Google News built-in sections (all categories from homepage)
     gn_search = await fetch_google_news(batch, limit=8, hours=6)
@@ -729,7 +729,7 @@ async def google_news_scanner_cycle():
     unique = deduplicate(all_articles)[:25]
 
     if not unique:
-        print("  ❌ No Google News articles found")
+        print("   No Google News articles found")
         return
 
     headlines = "\n".join([f"- {a['title']} ({a.get('source', 'Unknown')})" for a in unique])
@@ -737,11 +737,11 @@ async def google_news_scanner_cycle():
     prompt = f"""Here are {len(unique)} headlines from Google News India.
 Write a comprehensive market intelligence brief covering:
 
-1) TOP HEADLINES — The 5 most important stories right now and why they matter (cite headlines)
-2) MARKET IMPACT — How these stories affect the Indian stock market and key sectors
-3) SECTOR SPOTLIGHT — Which sectors are in focus based on these headlines
-4) INVESTOR ACTION ITEMS — 3 specific things investors should do right now
-5) RISK ALERTS — Any warnings or risks mentioned in the headlines
+1) TOP HEADLINES  The 5 most important stories right now and why they matter (cite headlines)
+2) MARKET IMPACT  How these stories affect the Indian stock market and key sectors
+3) SECTOR SPOTLIGHT  Which sectors are in focus based on these headlines
+4) INVESTOR ACTION ITEMS  3 specific things investors should do right now
+5) RISK ALERTS  Any warnings or risks mentioned in the headlines
 
 Headlines:
 {headlines}
@@ -769,20 +769,20 @@ IMPORTANT: Only reference information from these headlines. Write in plain text,
     })
 
 
-    print(f"  ✅ [GOOGLE NEWS SCANNER] {len(unique)} articles → brief broadcasted")
+    print(f"   [GOOGLE NEWS SCANNER] {len(unique)} articles  brief broadcasted")
 
 
-# ═══════════════════════════════════════
+# 
 # AGENT 9: Google Trends Tracker (every 20 min)
 # Detects unusual search spikes for stocks
-# ═══════════════════════════════════════
+# 
 
 _trends_batch_index = 0
 
 async def google_trends_tracker_cycle():
-    """Track Google search interest spikes for stocks — alternative data signal."""
+    """Track Google search interest spikes for stocks  alternative data signal."""
     global _trends_batch_index
-    print("\n📈 [GOOGLE TRENDS] Scanning search interest...")
+    print("\n [GOOGLE TRENDS] Scanning search interest...")
 
     scraper = GoogleTrendsScraper()
 
@@ -795,7 +795,7 @@ async def google_trends_tracker_cycle():
         batch += all_kw[:batch_size - len(batch)]
     _trends_batch_index += batch_size
 
-    print(f"  📋 Keywords this cycle: {batch}")
+    print(f"   Keywords this cycle: {batch}")
 
     # 1. Fetch interest data for the batch
     interest_data = await scraper.fetch_interest(keywords=batch)
@@ -810,7 +810,7 @@ async def google_trends_tracker_cycle():
     summary = ""
     if interest_data:
         spike_text = "\n".join([
-            f"- {d['keyword']}: Interest {d['current_interest']}/100 (avg {d['avg_interest']}) → {d['spike_ratio']}x {'🔥 SPIKE!' if d['is_spiking'] else ''} [{d['trend_direction']}]"
+            f"- {d['keyword']}: Interest {d['current_interest']}/100 (avg {d['avg_interest']})  {d['spike_ratio']}x {' SPIKE!' if d['is_spiking'] else ''} [{d['trend_direction']}]"
             for d in interest_data
         ])
         trending_text = "\n".join([
@@ -827,10 +827,10 @@ TOP TRENDING SEARCHES IN INDIA TODAY:
 {trending_text}
 
 Based on this data:
-1) SPIKE ALERTS — Which stocks have unusual search interest and what might it indicate?
-2) TRENDING ANALYSIS — Are any trending searches related to markets/stocks? What could they mean?
-3) INVESTOR SIGNAL — What should investors watch based on these search patterns?
-4) PREDICTION — Which stocks might see big moves based on search interest alone?
+1) SPIKE ALERTS  Which stocks have unusual search interest and what might it indicate?
+2) TRENDING ANALYSIS  Are any trending searches related to markets/stocks? What could they mean?
+3) INVESTOR SIGNAL  What should investors watch based on these search patterns?
+4) PREDICTION  Which stocks might see big moves based on search interest alone?
 
 IMPORTANT: Only reference the data provided. Write in plain text, no markdown."""
 
@@ -866,12 +866,12 @@ IMPORTANT: Only reference the data provided. Write in plain text, no markdown.""
     db.save_intelligence("google_trends_tracker", payload)
 
 
-    print(f"  ✅ [GOOGLE TRENDS] {len(interest_data)} keywords tracked, {len(spikes)} spikes detected, saved to DB")
+    print(f"   [GOOGLE TRENDS] {len(interest_data)} keywords tracked, {len(spikes)} spikes detected, saved to DB")
 
 
-# ═══════════════════════════════════════
+# 
 # FEATURE: Event Chain Prediction Engine
-# ═══════════════════════════════════════
+# 
 
 async def predict_event_chain(event_text: str) -> dict:
     """Given a geopolitical/market event, predict a cascading chain of impacts."""
@@ -948,33 +948,33 @@ Return ONLY valid JSON. No markdown fences."""
         }
 
 
-# ═══════════════════════════════════════
+# 
 # FEATURE: AI Signal Accuracy Tracker
-# ═══════════════════════════════════════
+# 
 
 SIGNAL_LOG_FILE = 'signal_log.json'
 
 def _load_signals() -> list:
-    """Kept for backward compat — now reads from DB."""
+    """Kept for backward compat  now reads from DB."""
     return []
 
 def _save_signals(signals: list):
-    """Kept for backward compat — DB handles persistence now."""
+    """Kept for backward compat  DB handles persistence now."""
     pass
 
 def log_signal(agent: str, signal_type: str, target: str, direction: str, confidence: str, reasoning: str = ""):
-    """Log an AI-generated signal — delegates to DB layer."""
+    """Log an AI-generated signal  delegates to DB layer."""
     db.log_signal(agent, signal_type, target, direction, confidence, reasoning)
 
 
 def get_signal_scorecard() -> dict:
-    """Calculate Oracle's overall signal accuracy — delegates to DB layer."""
+    """Calculate Oracle's overall signal accuracy  delegates to DB layer."""
     return db.get_signal_scorecard()
 
 
-# ═══════════════════════════════════════
+# 
 # Agent Status Tracking & Loops
-# ═══════════════════════════════════════
+# 
 
 agent_status = {
     "news_scanner":           {"status": "idle", "last_run": None, "cycle_count": 0},
@@ -1002,9 +1002,9 @@ async def run_agent_loop(name: str, fn, interval_min: int):
             agent_status[name]["cycle_count"] += 1
             agent_status[name]["status"] = "idle"
         except Exception as e:
-            print(f"❌ [{name.upper()}] Error: {e}")
+            print(f" [{name.upper()}] Error: {e}")
             agent_status[name]["status"] = "error"
-        print(f"⏳ [{name.upper()}] Next in {interval_min} min...")
+        print(f" [{name.upper()}] Next in {interval_min} min...")
         await asyncio.sleep(interval_min * 60)
 
 async def start_all_agents():

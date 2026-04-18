@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 import type { GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
-import { apiGet } from './api';
 
 // Fallback news pins when backend is unavailable
 const FALLBACK_NEWS = [
@@ -99,15 +98,21 @@ export default function ParticleGlobe() {
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Fetch live news from the backend OR live RSS feed
+  // Fetch live news from the backend (only if authenticated) OR fall back to live RSS feed
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        let backendData = [];
-        try {
-          // Attempt to fetch from Local Backend (authenticated)
-          backendData = await apiGet<any>('/api/geo/events');
-        } catch { /* Backend might be offline or token expired */ }
+        let backendData: any[] = [];
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            // Attempt to fetch from Local Backend (authenticated only)
+            const res = await fetch('/api/geo/events', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) backendData = await res.json();
+          } catch { /* Backend might be offline */ }
+        }
 
         // If backend has events, format and show them
         if (backendData && Array.isArray(backendData) && backendData.length >= 5) {

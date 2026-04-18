@@ -55,7 +55,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ── Geo Events Storage ──
+#  Geo Events Storage 
 
 CITY_COORDS = {
     "mumbai": (19.076, 72.8777), "delhi": (28.6139, 77.2090), "new delhi": (28.6139, 77.2090),
@@ -100,7 +100,7 @@ def _sync_geo_cache():
     """Load geo events from DB into the in-memory cache on startup."""
     global _geo_cache
     _geo_cache = db.get_geo_events(limit=200)
-    print(f"✅ [DB] Loaded {len(_geo_cache)} geo events from database")
+    print(f" [DB] Loaded {len(_geo_cache)} geo events from database")
 
 _sync_geo_cache()
 
@@ -231,7 +231,7 @@ from pydantic import BaseModel
 class AnalyzeRequest(BaseModel):
     event_text: str
 
-# ── REST Endpoints (no auth required) ──
+#  REST Endpoints (no auth required) 
 
 @app.post("/api/analyze_impact")
 async def analyze_impact(request: AnalyzeRequest, _user=Depends(require_auth)):
@@ -276,7 +276,7 @@ async def stock_analysis(request: StockAnalysisRequest, _user=Depends(require_au
         return {
             "symbol": request.symbol,
             "bias": "NEUTRAL",
-            "thesis": f"⚠️ Error: {str(e)}",
+            "thesis": f" Error: {str(e)}",
             "news_sources": [],
             "generated_at": ""
         }
@@ -329,7 +329,7 @@ async def claude_chart_analysis(request: ChartAnalysisRequest, _user=Depends(req
             "trend": {"direction": "SIDEWAYS", "strength": "WEAK", "description": "Analysis unavailable."},
             "key_levels": {"support": [], "resistance": []},
             "patterns": [],
-            "commentary": f"⚠️ Chart analysis failed: {str(e)}",
+            "commentary": f" Chart analysis failed: {str(e)}",
             "confidence": "LOW",
             "error": str(e)
         }
@@ -384,7 +384,7 @@ async def get_market_analysis(_user=Depends(require_auth)):
     data = db.get_intelligence("market_analyzer_full")
     if data:
         return data
-    return {"status": "no data yet — agents are still running their first cycle"}
+    return {"status": "no data yet  agents are still running their first cycle"}
 
 @app.get("/api/opportunities")
 async def get_opportunities(_user=Depends(require_auth)):
@@ -392,7 +392,7 @@ async def get_opportunities(_user=Depends(require_auth)):
     data = db.get_intelligence("opportunity_finder")
     if data:
         return data
-    return {"status": "no opportunities yet — agent is still running"}
+    return {"status": "no opportunities yet  agent is still running"}
 
 @app.get("/api/trending")
 async def get_trending(_user=Depends(require_auth)):
@@ -429,7 +429,7 @@ async def get_google_trends(_user=Depends(require_auth)):
     data = db.get_intelligence("google_trends_tracker")
     if data:
         return data
-    return {"status": "no trends data yet — agent is starting up"}
+    return {"status": "no trends data yet  agent is starting up"}
 
 @app.post("/api/predict_chain")
 async def predict_chain(request: AnalyzeRequest, _user=Depends(require_auth)):
@@ -449,7 +449,7 @@ async def get_signals(_user=Depends(require_auth)):
     except Exception as e:
         return {"error": str(e)}
 
-# ── Webhook (agents POST here to broadcast to UI) ──
+#  Webhook (agents POST here to broadcast to UI) 
 
 @app.post("/api/webhook/agent_event")
 async def agent_event(event: dict):
@@ -469,7 +469,7 @@ async def agent_event(event: dict):
     return {"status": "broadcasted", "clients": len(manager.active_connections)}
 
 
-# ── WebSocket ──
+#  WebSocket 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -482,7 +482,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception:
         manager.disconnect(websocket)
 
-# ── Static Frontend Serving for Render ──
+#  Static Frontend Serving for Render 
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 if os.path.exists(frontend_dist):

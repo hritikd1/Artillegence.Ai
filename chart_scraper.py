@@ -1,5 +1,5 @@
 """
-Chart Scraper — uses Playwright to capture high-quality screenshots of TradingView charts.
+Chart Scraper  uses Playwright to capture high-quality screenshots of TradingView charts.
 This bypasses CORS and CSS limitations of client-side capture (html2canvas).
 """
 import asyncio

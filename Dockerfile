@@ -2,9 +2,10 @@
 FROM python:3.11-slim
 
 # Install system dependencies for Playwright and Node.js
-# We need Node.js to build the frontend
-RUN apt-get update && apt-get install -y \
+# We use a comprehensive list to ensure Chromium runs without needing playwright install-deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     gnupg \
     libnss3 \
     libatk1.0-0 \
@@ -16,13 +17,14 @@ RUN apt-get update && apt-get install -y \
     libxdamage1 \
     libxext6 \
     libxfixes3 \
-    librandr2 \
+    libxrandr2 \
     libgbm1 \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
+    libxshmfence1 \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
@@ -34,8 +36,10 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Scrapling browsers and Playwright browsers
-RUN python -m scrapling install && playwright install chromium
+# Install Scrapling and Playwright Chromium
+# We explicitly avoid install-deps to prevent root switching issues on Render
+RUN playwright install chromium && \
+    python -m scrapling install
 
 # Build the frontend
 RUN cd frontend && npm install && npm run build
@@ -44,4 +48,5 @@ RUN cd frontend && npm install && npm run build
 EXPOSE 8000
 
 # Start command
+# We use uvicorn directly to ensure logging is correctly handled by Render
 CMD ["python", "main.py"]
