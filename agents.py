@@ -402,24 +402,28 @@ IMPORTANT: Base your analysis ONLY on these headlines. Cite the headline you are
 
 async def opportunity_finder_cycle():
     print("\n [OPPORTUNITY FINDER] Searching...")
+    try:
+        topics = [
+            ("Undervalued", "undervalued stocks India"),
+            ("Breakout", "breakout stocks India"),
+            ("Growth", "high growth companies India"),
+            ("Small Cap", "small cap mid cap stocks India"),
+            ("IPO", "upcoming IPO India 2026"),
+        ]
 
-    topics = [
-        ("Undervalued", "undervalued stocks India"),
-        ("Breakout", "breakout stocks India"),
-        ("Growth", "high growth companies India"),
-        ("Small Cap", "small cap mid cap stocks India"),
-        ("IPO", "upcoming IPO India 2026"),
-    ]
+        articles = await fetch_rss(topics, limit=5, hours=6)
+        unique = deduplicate(articles)[:15]
 
-    articles = await fetch_rss(topics, limit=5, hours=6)
-    unique = deduplicate(articles)[:15]
+        headlines = "\n".join([f"- {a['title']}" for a in unique])
 
+        # Inject memory context before generating analysis
+        memory_ctx = db.build_memory_context("opportunity_finder")
+        
+        # Get latest market context from the other agent
+        market_analysis_data = db.get_intelligence("market_analyzer_full") or {}
+        market_ctx = str(market_analysis_data.get("market_overview", {}).get("analysis", "Stable market conditions."))
 
-    headlines = "\n".join([f"- {a['title']}" for a in unique])
-
-    # Inject memory context before generating analysis
-    memory_ctx = db.build_memory_context("opportunity_finder")
-    prompt = f"""Based on these news headlines and market context, identify TOP 5 INVESTMENT OPPORTUNITIES.
+        prompt = f"""Based on these news headlines and market context, identify TOP 5 INVESTMENT OPPORTUNITIES.
 {memory_ctx}
 News:
 {headlines}
@@ -438,7 +442,24 @@ Also name ONE stock to AVOID.
 
 IMPORTANT: Only cite information from these headlines. Write in plain text only."""
 
-    analysis = await call_mistral(prompt)
+        analysis = await call_mistral(prompt)
+        db.append_agent_memory("opportunity_finder", analysis[:600])
+        sources = make_source_list(unique, limit=5)
+
+        await broadcast({
+            "agent": "opportunity_finder",
+            "title": "Investment Opportunities Found",
+            "summary": analysis[:2000],
+            "sources": sources,
+            "source_count": len(unique),
+            "timestamp": datetime.now().isoformat()
+        })
+        print("   [OPPORTUNITY FINDER] Complete")
+
+    except Exception as e:
+        print(f"   [OPPORTUNITY FINDER] Critical Cycle Error: {e}")
+        # Log to DB so UI shows the error instead of crashing the thread
+        db.save_intelligence("opportunity_finder", {"status": f"Agent error: {str(e)}"})
     db.append_agent_memory("opportunity_finder", analysis[:600])
     sources = make_source_list(unique, limit=5)
 
