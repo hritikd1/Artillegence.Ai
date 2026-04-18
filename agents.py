@@ -368,6 +368,11 @@ IMPORTANT: Base your analysis ONLY on these headlines. Cite the headline you are
             'sources': sources,
         }
 
+        # Save INCREMENTALLY so UI updates section by section
+        existing = db.get_intelligence("market_analyzer_full") or {}
+        existing[section_name] = results[section_name]
+        db.save_intelligence("market_analyzer_full", existing)
+
         # Append section result to agent memory
         db.append_agent_memory("market_analyzer", f"{section_name}: {analysis[:400]}")
 
@@ -381,7 +386,7 @@ IMPORTANT: Base your analysis ONLY on these headlines. Cite the headline you are
             "timestamp": datetime.now().isoformat()
         })
 
-        await asyncio.sleep(5) # Cooldown to avoid 429 Rate Limits
+        await asyncio.sleep(8) # Increased cooldown to avoid 429 errors
 
     # Save full results to DB (replaces market_analysis.json)
     if results:

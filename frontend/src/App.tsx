@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
 import { apiGet, apiPost } from './api'
 
+const ParticleGlobe = lazy(() => import('./ParticleGlobe'));
 const EarthMap = lazy(() => import('./EarthMap'));
 const ChartsTab = lazy(() => import('./ChartsTab'));
 
@@ -367,7 +368,7 @@ function App() {
                 <span className="text-slate-500 ml-3">Loading Earth Map...</span>
               </div>
             }>
-              <EarthMap events={geoEvents} />
+              <ParticleGlobe events={geoEvents} />
             </Suspense>
           </div>
           <div className="lg:col-span-1">
