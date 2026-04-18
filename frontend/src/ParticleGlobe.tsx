@@ -76,7 +76,25 @@ const CITIES_LIST = [
   { city: 'Washington', lat: 38.90, lng: -77.03, severity: 'critical' }
 ];
 
-export default function ParticleGlobe() {
+interface GeoEvent {
+  id: string;
+  lat: number;
+  lng: number;
+  city: string;
+  country: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  timestamp: string;
+}
+
+interface ParticleGlobeProps {
+  events: GeoEvent[];
+}
+
+export default function ParticleGlobe({ events }: ParticleGlobeProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [liveNews, setLiveNews] = useState<any[]>([]);

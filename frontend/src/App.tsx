@@ -10,7 +10,6 @@ import TelegramFeed from './TelegramFeed'
 import { apiGet, apiPost } from './api'
 
 const ParticleGlobe = lazy(() => import('./ParticleGlobe'));
-const EarthMap = lazy(() => import('./EarthMap'));
 const ChartsTab = lazy(() => import('./ChartsTab'));
 
 interface GeoEvent {
