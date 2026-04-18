@@ -13,7 +13,7 @@ import database as db
 load_dotenv()
 
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
-MISTRAL_API_URL = 'https://api.mistral.ai/ v1/chat/completions'
+MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
 
 # Dynamic Port for Render internal communication
 API_PORT = os.getenv("PORT", "8000")
@@ -89,7 +89,7 @@ async def post_to_api(endpoint: str, payload: dict):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{BASE_API_URL}/api/logs/agent_event", json=payload
+                f"{BASE_API_URL}/api/webhook/agent_event", json=payload
             ) as resp:
                 if resp.status == 200:
                     print(f"   Logged {endpoint} successfully")
