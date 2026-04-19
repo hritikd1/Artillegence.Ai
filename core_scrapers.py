@@ -3,6 +3,7 @@ import asyncio
 import requests
 import feedparser
 import time
+import re
 from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
