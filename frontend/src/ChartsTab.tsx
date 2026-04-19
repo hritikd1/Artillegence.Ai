@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Search, BrainCircuit, Camera, TrendingUp, TrendingDown,
     Minus, AlertTriangle, Newspaper, RefreshCw, ChevronDown, ChevronUp,
-    Eye, ExternalLink, ClipboardPaste
+    Eye, ClipboardPaste
 } from 'lucide-react';
 import { apiPost } from './api';
 import Plot from 'react-plotly.js';
@@ -130,7 +130,6 @@ export default function ChartsTab() {
     const [mistralThesis, setMistralThesis] = useState<MistralThesis | null>(null);
     const [isCapturing, setIsCapturing] = useState(false);
     const [isFetchingNews, setIsFetchingNews] = useState(false);
-    const [captureError, setCaptureError] = useState('');
     const [showSources, setShowSources] = useState(false);
     const [activePanel, setActivePanel] = useState<'claude' | 'mistral'>('claude');
 

@@ -3,7 +3,7 @@ import {
   Activity, Radio, Cpu, Satellite, TrendingUp, Search,
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
   ChevronRight, ChevronDown, RefreshCw, Clock, Globe,
-  DollarSign, Eye, Newspaper, Zap, Target, ArrowRight, Shield
+  DollarSign, Eye, Newspaper, Zap, Target, ArrowRight, Shield, X
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
@@ -648,6 +648,14 @@ function App() {
         </div>
       )}
 
+      {/* Tactical Advisor Modal */}
+      <TacticalAdvisorModal 
+        show={tacticalAdvisor.show}
+        loading={tacticalAdvisor.loading}
+        title={tacticalAdvisor.title}
+        content={tacticalAdvisor.content}
+        onClose={() => setTacticalAdvisor(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }
@@ -902,65 +910,6 @@ function AgentSection({
           </span>
         )}
       </div>
-      {/* Tactical Advisor Modal */}
-      {tacticalAdvisor.show && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="glass-panel w-full max-w-2xl max-h-[80vh] overflow-y-auto relative animate-in fade-in zoom-in duration-300">
-            <button 
-              onClick={() => setTacticalAdvisor(prev => ({ ...prev, show: false }))}
-              className="absolute top-4 right-4 text-slate-500 hover:text-white transition"
-            >
-              <X size={20} />
-            </button>
-            
-            <div className="p-6 border-b border-slate-800">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="px-2 py-0.5 bg-neonBlue/10 border border-neonBlue/30 rounded">
-                  <span className="text-[10px] font-bold text-neonBlue tracking-widest uppercase italic">Tactical Advisor</span>
-                </div>
-              </div>
-              <h2 className="text-xl font-bold text-white leading-tight">{tacticalAdvisor.title}</h2>
-            </div>
-            
-            <div className="p-6">
-              {tacticalAdvisor.loading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="h-10 w-10 border-4 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin"></div>
-                  <p className="text-sm text-slate-400 italic">Synthesizing tactical action plan...</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="prose prose-invert prose-sm max-w-none">
-                    <div className="text-slate-300 leading-relaxed whitespace-pre-line tactical-content">
-                      {tacticalAdvisor.content.split('\n').map((line, i) => {
-                        if (line.startsWith('**') || line.includes(':**')) {
-                          return <div key={i} className="mt-4 first:mt-0 font-bold text-neonBlue text-sm tracking-wide">{line.replace(/\*\*/g, '')}</div>;
-                        }
-                        return <p key={i} className="mb-2 text-slate-300">{line}</p>;
-                      })}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 pt-4 border-t border-slate-800">
-                    <button 
-                      onClick={() => setTacticalAdvisor(prev => ({ ...prev, show: false }))}
-                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-bold transition"
-                    >
-                      DISMISS
-                    </button>
-                    <button 
-                      onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(tacticalAdvisor.title)}+latest+news`, '_blank')}
-                      className="flex-1 py-2.5 bg-neonBlue hover:bg-neonBlue/80 text-black rounded font-bold transition"
-                    >
-                      VERIFY LIVE
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {event ? (
         <div>
