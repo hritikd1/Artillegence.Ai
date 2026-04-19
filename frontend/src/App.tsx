@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense, lazy, Component, type ReactNode } from 'react'
 import {
   Activity, Radio, Cpu, Satellite, TrendingUp, Search,
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
-  ChevronRight, ChevronDown, RefreshCw, Clock, Globe,
+  ChevronRight, ChevronDown, RefreshCw, Clock, Globe, AlertTriangle,
   DollarSign, Eye, Newspaper, Zap, Target, ArrowRight, Shield, X
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -108,6 +108,40 @@ function parseSectorScores(text: string): { name: string; score: number }[] {
     if (match) sectors.push({ name, score: parseInt(match[1]) });
   }
   return sectors;
+}
+
+/* ─── Safety Guard Components ─── */
+
+interface EBProps { children: ReactNode; }
+interface EBState { hasError: boolean; }
+
+class ErrorBoundary extends Component<EBProps, EBState> {
+  constructor(props: EBProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Global Dashboard Guard caught error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px] text-center">
+          <AlertTriangle className="text-amber-500 mb-6" size={64} />
+          <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-widest">Analytics Layer Standby</h2>
+          <p className="text-slate-400 max-w-md mx-auto text-sm leading-relaxed mb-6">
+            An unforeseen visualization conflict occurred. The core News Scanner and Intelligence Map remain fully functional.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-neonBlue text-black font-bold rounded-lg hover:bg-neonBlue/80 transition"
+          >
+            RELOAD ANALYTICS
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /* ─── Modal Components ─── */
@@ -706,16 +740,18 @@ function App() {
       </div>
 
       {/* ChartsTab is ALWAYS mounted to prevent TradingView widget from reloading on tab switch */}
-      <Suspense fallback={
-        <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px]">
-          <Activity className="animate-pulse text-neonBlue mb-4" size={48} />
-          <span className="text-slate-400 font-bold tracking-widest">LOADING TRADING/AI ANALYST...</span>
-        </div>
-      }>
-        <div style={{ display: activeTab === 'charts' ? 'block' : 'none' }}>
-          <ChartsTab />
-        </div>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px]">
+            <Activity className="animate-pulse text-neonBlue mb-4" size={48} />
+            <span className="text-slate-400 font-bold tracking-widest">LOADING TRADING/AI ANALYST...</span>
+          </div>
+        }>
+          <div style={{ display: activeTab === 'charts' ? 'block' : 'none' }}>
+            <ChartsTab />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
 
       {activeTab === 'monitor' && (
         <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px] animate-fade-in border-dashed border-2 border-slate-700/50">

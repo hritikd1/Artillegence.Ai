@@ -11,6 +11,17 @@ export default defineConfig({
   optimizeDeps: {
     include: ['plotly.js-dist-min', 'react-plotly.js/factory']
   },
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'plotly-engine': ['plotly.js-dist-min'],
+          'react-vendor': ['react', 'react-dom', 'react-router-dom']
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     proxy: {

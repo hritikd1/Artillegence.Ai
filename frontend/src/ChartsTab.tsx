@@ -5,7 +5,7 @@ import {
     Eye, ClipboardPaste
 } from 'lucide-react';
 import { apiPost } from './api';
-import Plotly from 'plotly.js-dist-min';
+// Static imports removed for production stability
 
 /* ─── Robust Plotly Loader ─── */
 function SafePlot({ component, ...props }: any) {
@@ -186,11 +186,19 @@ export default function ChartsTab() {
         let isMounted = true;
         const loadPlotly = async () => {
             try {
-                const factory = (await import('react-plotly.js/factory')).default;
+                // Dynamically import BOTH library and factory with high-priority chunking
+                const [PlotlyModule, factoryModule] = await Promise.all([
+                    import('plotly.js-dist-min'),
+                    import('react-plotly.js/factory')
+                ]);
+                
+                const Plotly = PlotlyModule.default;
+                const factory = factoryModule.default;
                 const created = factory(Plotly);
+                
                 if (isMounted) setPlotComponent(() => created);
             } catch (err) {
-                console.error("Critical Plotly Load Error:", err);
+                console.error("CRITICAL: Plotly Engine Load Failure", err);
             }
         };
         loadPlotly();
