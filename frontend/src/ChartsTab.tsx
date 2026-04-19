@@ -213,7 +213,6 @@ export default function ChartsTab() {
     /* ── Process Base64 & send to Mistral Vision backend ── */
     const processImageBase64 = async (base64Data: string) => {
         setIsCapturing(true);
-        setCaptureError('');
         setClaudeAnalysis(null);
         setLastCapturedImage(base64Data);
         setChatHistory([]); // Reset chat for new chart
@@ -232,7 +231,7 @@ export default function ChartsTab() {
             setClaudeAnalysis(data);
             setActivePanel('claude');
         } catch (err: any) {
-            setCaptureError(err.message || 'Analysis failed');
+            console.error('Vision analysis error:', err);
         } finally {
             setIsCapturing(false);
         }
