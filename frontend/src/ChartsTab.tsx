@@ -569,6 +569,8 @@ export default function ChartsTab() {
                     </button>
                 </form>
             </div>
+            {/* ── Main Grid ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-5" style={{ minHeight: '640px' }}>
                 {/* Left Column: Charts Area */}
                 <div className="lg:col-span-3 flex flex-col gap-4">
                     
