@@ -34,10 +34,8 @@ class MistralAnalyzer:
                 You are an economic intelligence analyst specializing in Indian markets. 
                 Analyze the given information and provide exactly these sections with these exact headings:
                 
-                1. SUMMARY: A concise explanation of the news/event
-                2. SECTOR IMPACT: List specific sectors that will be affected (positive/negative)
-                3. STOCK RECOMMENDATIONS: Name 2-3 specific Indian stocks that could be impacted
-                4. CONFIDENCE: Rate your confidence in this analysis (Low/Medium/High)
+                4. TACTICAL ACTION PLAN: Specific, data-driven trade setup (Entry, Target, Stop Loss) if applicable to Indian markets. For general news, suggest a portfolio hedging strategy (e.g. "Buy NIFTY Puts", "Increase Cash").
+                5. CONFIDENCE: Rate your confidence (Low/Medium/High)
                 '''
                 
                 user_message = f"Context: {context if context else 'None'}\n\nText to analyze: {text}"
@@ -107,7 +105,6 @@ class MistralAnalyzer:
                 ]
             }
             
-            import aiohttp
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.api_url, headers=headers, json=payload, timeout=60) as response:
                     if response.status == 200:
@@ -151,7 +148,6 @@ class MistralAnalyzer:
                 ]
             }
             
-            import aiohttp
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.api_url, headers=headers, json=payload, timeout=45) as response:
                     if response.status == 200:
@@ -172,7 +168,6 @@ class MistralAnalyzer:
         url = f"https://news.google.com/rss/search?q={query}+stock+share+price&hl=en-IN&gl=IN&ceid=IN:en"
         news_items = []
         try:
-            import aiohttp
             import xml.etree.ElementTree as ET
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"}) as resp:
@@ -214,17 +209,9 @@ class MistralAnalyzer:
         
         **COMPANY OVERVIEW:** (1 sentence on what this company does and its sector)
         
-        **LATEST DEVELOPMENTS:** (2-3 bullet points summarizing the key news items provided)
+        **TACTICAL ACTION PLAN:** (Provide a specific trade setup: Entry Price Range, Primary Target, and a hard Stop-Loss level. Be extremely precise based on recent price action trends in the news.)
         
-        **FUNDAMENTAL OUTLOOK:** (Brief assessment of balance sheet health, growth trajectory, valuations)
-        
-        **TECHNICAL BIAS:** (State the likely technical setup: ranging, trending up, trending down, breakout, breakdown, etc.)
-        
-        **KEY LEVELS:** (State 2 support levels and 2 resistance levels the analyst should watch)
-        
-        **CATALYST WATCH:** (What upcoming events could move this stock significantly: earnings, regulatory decisions, macro data)
-        
-        **POSITIONING BIAS:** (Declare LONG, SHORT, or NEUTRAL with a 1-sentence rationale and stop-loss suggestion)
+        **POSITIONING BIAS:** (Declare LONG, SHORT, or NEUTRAL with a 1-sentence rationale)
         
         Be specific, data-driven, and actionable. Use the news headlines provided as your primary reference."""
 
@@ -249,8 +236,6 @@ Provide a complete trading thesis for this stock."""
                 'temperature': 0.4
             }
 
-            import aiohttp
-            from datetime import datetime
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.api_url, headers=headers, json=payload, timeout=60) as response:
                     if response.status == 200:
@@ -298,7 +283,6 @@ Provide a complete trading thesis for this stock."""
         url = f"https://news.google.com/rss/search?q={search_query}&hl=en-US&gl=US&ceid=US:en"
         news_items = []
         try:
-            import aiohttp
             import xml.etree.ElementTree as ET
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"}) as resp:
@@ -316,9 +300,6 @@ Provide a complete trading thesis for this stock."""
 
         # Step 1.5: Scrape web snippets for factual data (prices, dates) via DDG Lite
         web_snippets = []
-        try:
-            import aiohttp
-            import re
             ddg_url = "https://html.duckduckgo.com/html/"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             post_data = {"q": query}

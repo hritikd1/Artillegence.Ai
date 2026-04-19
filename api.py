@@ -258,6 +258,19 @@ async def custom_search(request: CustomSearchRequest, _user=Depends(require_auth
     except Exception as e:
         return {"error": str(e)}
 
+class ForecastRequest(BaseModel):
+    symbol: str
+
+@app.post("/api/stock_forecast")
+async def stock_forecast(request: ForecastRequest, _user=Depends(require_auth)):
+    """Generate a pattern-matching forecast for a given stock symbol."""
+    try:
+        forecaster = StockForecaster(request.symbol)
+        result = forecaster.generate_forecast()
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
 class AddSourceRequest(BaseModel):
     url: str
 

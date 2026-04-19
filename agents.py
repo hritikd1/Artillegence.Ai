@@ -452,31 +452,36 @@ IMPORTANT: Only cite information from these headlines. Write in plain text only.
         db.append_agent_memory("opportunity_finder", analysis[:600])
         sources = make_source_list(unique, limit=5)
 
-        await broadcast({
+        # Parse signals and log to DB
+        lines = analysis.split('\n')
+        current_opp = None
+        for line in lines:
+            line = line.strip()
+            if not line: continue
+            # Basic heuristic to find opportunities: Stock name usually at start of numbered list
+            if line[0].isdigit() and ('.' in line[:3] or ')' in line[:3]):
+                name = line.split('.', 1)[-1].split(')', 1)[-1].strip()
+                current_opp = name
+            elif current_opp and ("ACTION:" in line.upper() or "BUY" in line.upper() or "WATCH" in line.upper()):
+                direction = "LONG" if "BUY" in line.upper() or "ACCUMULATE" in line.upper() else "NEUTRAL"
+                db.log_signal("opportunity_finder", "EQUITY", current_opp, direction, "MEDIUM", line)
+                current_opp = None # logged
+
+        payload = {
             "agent": "opportunity_finder",
             "title": "Investment Opportunities Found",
             "summary": analysis[:2000],
             "sources": sources,
             "source_count": len(unique),
             "timestamp": datetime.now().isoformat()
-        })
-        print("   [OPPORTUNITY FINDER] Complete")
+        }
+        await broadcast(payload)
+        db.save_intelligence("opportunity_finder", payload)
+        print("   [OPPORTUNITY FINDER] Complete and logged signals")
 
     except Exception as e:
         print(f"   [OPPORTUNITY FINDER] Critical Cycle Error: {e}")
-        # Log to DB so UI shows the error instead of crashing the thread
         db.save_intelligence("opportunity_finder", {"status": f"Agent error: {str(e)}"})
-    db.append_agent_memory("opportunity_finder", analysis[:600])
-    sources = make_source_list(unique, limit=5)
-
-    await broadcast({
-        "agent": "opportunity_finder",
-        "title": "Investment Opportunities Found",
-        "summary": analysis[:2000],
-        "sources": sources,
-        "source_count": len(unique),
-        "timestamp": datetime.now().isoformat()
-    })
 
 
     print("   [OPPORTUNITY FINDER] Complete")

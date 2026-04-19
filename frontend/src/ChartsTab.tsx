@@ -5,6 +5,7 @@ import {
     Eye, ExternalLink, ClipboardPaste
 } from 'lucide-react';
 import { apiPost } from './api';
+import Plot from 'react-plotly.js';
 
 /* ─── Types ─── */
 interface ChartAnalysis {
@@ -140,6 +141,9 @@ export default function ChartsTab() {
     const [lastCapturedImage, setLastCapturedImage] = useState<string>(''); // Store the last image sent
     const chatEndRef = useRef<HTMLDivElement>(null);
 
+    const [forecastData, setForecastData] = useState<any>(null);
+    const [isFetchingForecast, setIsFetchingForecast] = useState(false);
+
     useEffect(() => {
         if (chatEndRef.current) {
             chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -192,6 +196,20 @@ export default function ChartsTab() {
             setIsFetchingNews(false);
         }
     }, []);
+
+    /* ── Fetch Forecast Data ── */
+    const fetchForecast = async (symbol: string) => {
+        if (!symbol) return;
+        setIsFetchingForecast(true);
+        try {
+            const data = await apiPost<any>('/api/stock_forecast', { symbol });
+            setForecastData(data);
+        } catch (err) {
+            console.error("Forecast error:", err);
+        } finally {
+            setIsFetchingForecast(false);
+        }
+    };
 
     /* ── Process Base64 & send to Mistral Vision backend ── */
     const processImageBase64 = async (base64Data: string) => {
@@ -285,10 +303,13 @@ export default function ChartsTab() {
         setActiveSymbol(formatted);
         setClaudeAnalysis(null);
         setMistralThesis(null);
+        setForecastData(null); // Reset forecast
         setShowSources(false);
         setSymbolInput('');
-        // Auto-fetch Mistral news thesis
+        
+        // Auto-fetch all AI layers
         fetchMistralThesis(formatted);
+        fetchForecast(formatted);
     };
 
     /* ─── Render Mistral Vision Panel ─── */
@@ -547,84 +568,195 @@ export default function ChartsTab() {
                         <Search size={18} />
                     </button>
                 </form>
-            </div>
-
-            {/* ── Main Grid ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-5" style={{ minHeight: '640px' }}>
-
-                {/* Left: Embedded TradingView Chart */}
-                <div className="lg:col-span-3 flex flex-col gap-3">
-
-                    {/* Action Bar */}
-                    <div className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                            <Eye size={14} className="text-slate-500" />
-                            <span className="text-[11px] text-slate-400">Viewing: </span>
-                            <span className="text-sky-400 font-mono font-bold text-sm">{activeSymbol}</span>
-                            <a
-                                href={`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(activeSymbol)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-sky-400 transition-colors border border-slate-700/50 rounded px-2 py-0.5 hover:border-sky-500/40"
-                                title="Open in full TradingView (login for restricted symbols)"
-                            >
-                                <ExternalLink size={10} /> Open in TV
-                            </a>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={handlePasteFromClipboard}
-                                disabled={isCapturing}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600/80 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed border border-violet-500/50 text-white text-xs font-bold tracking-wide transition-all shadow-lg shadow-violet-900/40"
-                                title="Read an image from your clipboard to analyze"
-                            >
-                                <ClipboardPaste size={14} className={isCapturing ? 'animate-pulse' : ''} />
-                                {isCapturing ? 'ANALYZING...' : 'PASTE TO ANALYZE 📋'}
-                            </button>
-                            <button
-                                onClick={() => fetchMistralThesis(activeSymbol)}
-                                disabled={isFetchingNews}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/40 text-orange-300 text-xs font-bold tracking-wide transition-all disabled:opacity-50"
-                            >
-                                <RefreshCw size={12} className={isFetchingNews ? 'animate-spin' : ''} />
-                                NEWS
-                            </button>
-                        </div>
-                    </div>
-
-                    {captureError && (
-                        <div className="text-xs text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2 flex items-center gap-2">
-                            <AlertTriangle size={12} /> {captureError}
-                        </div>
-                    )}
-
-                    {/* Embedded TradingView Chart (Advanced Widget) */}
-                    <div
-                        className="glass-panel overflow-hidden rounded-xl border border-slate-700/50 shadow-2xl"
+            </div>
+                {/* Left Column: Charts Area */}
+                <div className="lg:col-span-3 flex flex-col gap-4">
+                    
+                    {/* Primary TradingView Chart Container */}
+                    <div 
+                        className="glass-panel overflow-hidden border-2 border-slate-800/50 shadow-2xl relative group" 
                         style={{ height: '560px' }}
                     >
+                        {/* Overlay "Analyzing" Badge when active */}
+                        {isFetchingNews && (
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 bg-orange-600/90 backdrop-blur-md rounded-full border border-orange-400/50 flex items-center gap-2 shadow-lg shadow-orange-950/40">
+                                <RefreshCw size={12} className="animate-spin text-white" />
+                                <span className="text-[10px] font-black text-white tracking-widest">AGENT SCANNING LIVE FEEDS...</span>
+                            </div>
+                        )}
                         <TradingViewWidget symbol={activeSymbol} />
                     </div>
 
-                    {/* Quick Symbol Bar */}
-                    <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-600 mr-1">Quick:</span>
-                            {['NSE:RELIANCE', 'NSE:TCS', 'NASDAQ:NVDA', 'NSE:INFY', 'NSE:HDFCBANK', 'NASDAQ:AAPL'].map(sym => (
-                                <button
-                                    key={sym}
-                                    onClick={() => { setActiveSymbol(sym); fetchMistralThesis(sym); }}
-                                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${activeSymbol === sym
-                                            ? 'bg-sky-600/30 text-sky-300 border border-sky-500/50'
-                                            : 'bg-slate-800/40 hover:bg-slate-700/60 text-slate-500 hover:text-sky-300 border border-transparent'
-                                        }`}
-                                >
-                                    {sym.split(':')[1]}
-                                </button>
-                            ))}
+                    {/* 🚀 AI Predictive Forecast Integration (PlotyForecast Project) */}
+                    <div className="glass-panel p-6 border border-slate-800/50 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-neonBlue/40"></div>
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-neonBlue/10 rounded-lg border border-neonBlue/20">
+                                    <TrendingUp className="text-neonBlue" size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-white tracking-widest uppercase italic flex items-center gap-2">
+                                        AI Predictive Asset Forecast 
+                                        <span className="text-[8px] font-normal text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded not-italic tracking-normal">PATTERN MATCHED</span>
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-medium">Historical matching algorithm detects future trajectory</p>
+                                </div>
+                            </div>
+                            
+                            {forecastData?.correlation_score && (
+                                <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                        <div className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Model Confidence</div>
+                                        <div className="text-sm font-black text-neonBlue italic">{(forecastData.correlation_score * 100).toFixed(1)}%</div>
+                                    </div>
+                                    <div className="h-8 w-[1px] bg-slate-800"></div>
+                                    <button 
+                                        onClick={() => fetchForecast(activeSymbol)} 
+                                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-neonBlue transition-all"
+                                        title="Rerun forecast match"
+                                    >
+                                        <RefreshCw size={14} className={isFetchingForecast ? 'animate-spin' : ''} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <div className="text-[10px] text-slate-500 italic">
-                            💡 Use the 📷 icon on the chart to copy it, then press Ctrl+V to analyze it with Mistral.
+
+                        {isFetchingForecast ? (
+                            <div className="h-[380px] flex flex-col items-center justify-center space-y-6 bg-slate-900/10 rounded-xl border border-dashed border-slate-700/30">
+                                <div className="relative">
+                                    <div className="w-16 h-16 border-4 border-neonBlue/10 rounded-full"></div>
+                                    <div className="absolute top-0 left-0 w-16 h-16 border-4 border-t-neonBlue rounded-full animate-spin"></div>
+                                    <BrainCircuit className="absolute inset-0 m-auto text-neonBlue animate-pulse" size={24} />
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-xs text-neonBlue font-black tracking-[0.2em] mb-1">COMPUTING PATTERN VECTORS</p>
+                                    <p className="text-[9px] text-slate-500 font-mono">Comparing current structure to 2-year market history...</p>
+                                </div>
+                            </div>
+                        ) : forecastData ? (
+                            <div className="w-full overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40 relative">
+                                <Plot
+                                    data={[
+                                        {
+                                            x: forecastData.history.date,
+                                            open: forecastData.history.open,
+                                            high: forecastData.history.high,
+                                            low: forecastData.history.low,
+                                            close: forecastData.history.close,
+                                            type: 'candlestick',
+                                            name: 'Market Price',
+                                            increasing: { line: { color: '#22c55e', width: 1.5 } },
+                                            decreasing: { line: { color: '#ef4444', width: 1.5 } },
+                                        },
+                                        {
+                                            x: forecastData.forecast.date,
+                                            y: forecastData.forecast.price,
+                                            type: 'scatter',
+                                            mode: 'lines',
+                                            name: 'AI Projection',
+                                            line: { color: '#facc15', width: 3, dash: 'dot', shape: 'spline' },
+                                            fill: 'none'
+                                        }
+                                    ]}
+                                    layout={{
+                                        autosize: true,
+                                        height: 380,
+                                        margin: { l: 45, r: 25, t: 15, b: 40 },
+                                        paper_bgcolor: 'rgba(0,0,0,0)',
+                                        plot_bgcolor: 'rgba(0,0,0,0)',
+                                        showlegend: true,
+                                        legend: { 
+                                            orientation: 'h', 
+                                            y: 1.08, 
+                                            x: 1, 
+                                            xanchor: 'right',
+                                            font: { color: '#94a3b8', size: 10, family: 'sans-serif' },
+                                            bgcolor: 'rgba(0,0,0,0)'
+                                        },
+                                        xaxis: {
+                                            gridcolor: 'rgba(51, 65, 85, 0.4)',
+                                            tickfont: { size: 9, color: '#64748b' },
+                                            rangeslider: { visible: false },
+                                            zeroline: false
+                                        },
+                                        yaxis: {
+                                            gridcolor: 'rgba(51, 65, 85, 0.4)',
+                                            tickfont: { size: 9, color: '#64748b' },
+                                            zeroline: false,
+                                            side: 'right'
+                                        },
+                                        hovermode: 'x unified',
+                                        hoverlabel: { bgcolor: '#0f172a', font: { size: 11, color: '#fff' } }
+                                    }}
+                                    config={{ displayModeBar: false, responsive: true }}
+                                    className="w-full"
+                                />
+                                <div className="p-4 bg-slate-900/60 border-t border-slate-800/80 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle size={12} className="text-amber-500/50" />
+                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Strategic Disclaimer</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 italic max-w-lg text-right">
+                                        Match determined by recursive correlation analysis. Historical performance is not indicative of future results.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-[220px] flex flex-col items-center justify-center text-slate-600 bg-slate-900/10 rounded-xl border border-dashed border-slate-700/40">
+                                <BrainCircuit size={48} className="opacity-10 mb-4 animate-pulse" />
+                                <div className="text-center">
+                                    <p className="text-xs font-bold text-slate-500 tracking-widest uppercase">Predictive model idle</p>
+                                    <p className="text-[10px] text-slate-600 mt-1 italic">Search a symbol to initialize cross-window correlation matching</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Original Tools Bar and Quick Select */}
+                    <div className="flex flex-col gap-3">
+                        <div className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <Eye size={14} className="text-slate-500" />
+                                <span className="text-[11px] text-slate-400">Viewing: </span>
+                                <span className="text-sky-400 font-mono font-bold text-sm tracking-widest">{activeSymbol}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handlePasteFromClipboard}
+                                    disabled={isCapturing}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600/80 hover:bg-violet-600 disabled:opacity-50 border border-violet-500/50 text-white text-xs font-bold transition-all shadow-lg shadow-violet-900/30"
+                                >
+                                    <ClipboardPaste size={14} className={isCapturing ? 'animate-pulse' : ''} />
+                                    {isCapturing ? 'ANALYZING...' : 'CHART SCANNER 📋'}
+                                </button>
+                                <button
+                                    onClick={() => fetchMistralThesis(activeSymbol)}
+                                    disabled={isFetchingNews}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/40 text-orange-400 text-xs font-bold transition-all disabled:opacity-50"
+                                >
+                                    <RefreshCw size={12} className={isFetchingNews ? 'animate-spin' : ''} />
+                                    LIVE NEWS
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-slate-600 tracking-widest uppercase mr-1">Quick Watch:</span>
+                                {['NSE:RELIANCE', 'NSE:TCS', 'NASDAQ:NVDA', 'NSE:INFY', 'NSE:HDFCBANK'].map(sym => (
+                                    <button
+                                        key={sym}
+                                        onClick={() => { setActiveSymbol(sym); fetchMistralThesis(sym); fetchForecast(sym); }}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold transition-all border ${activeSymbol === sym
+                                                ? 'bg-sky-600/20 text-sky-400 border-sky-500/50'
+                                                : 'bg-slate-900/40 text-slate-500 border-transparent hover:border-slate-700'
+                                            }`}
+                                    >
+                                        {sym.split(':')[1]}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
