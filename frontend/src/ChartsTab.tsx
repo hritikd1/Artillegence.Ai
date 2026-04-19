@@ -5,7 +5,9 @@ import {
     Eye, ClipboardPaste
 } from 'lucide-react';
 import { apiPost } from './api';
-import Plot from 'react-plotly.js';
+import Plotly from 'plotly.js-dist-min';
+import createPlotComponent from 'react-plotly.js/factory';
+const Plot = createPlotComponent(Plotly);
 
 /* ─── Types ─── */
 interface ChartAnalysis {
@@ -141,6 +143,7 @@ export default function ChartsTab() {
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const [forecastData, setForecastData] = useState<any>(null);
+    const [forecastInput, setForecastInput] = useState('');
     const [isFetchingForecast, setIsFetchingForecast] = useState(false);
 
     useEffect(() => {
@@ -299,15 +302,12 @@ export default function ChartsTab() {
         if (!symbolInput.trim()) return;
         const formatted = formatSymbol(symbolInput);
         setActiveSymbol(formatted);
-        setClaudeAnalysis(null);
         setMistralThesis(null);
-        setForecastData(null); // Reset forecast
         setShowSources(false);
         setSymbolInput('');
         
-        // Auto-fetch all AI layers
+        // Auto-fetch News layer ONLY (Forecast is now decoupled)
         fetchMistralThesis(formatted);
-        fetchForecast(formatted);
     };
 
     /* ─── Render Mistral Vision Panel ─── */
@@ -604,22 +604,43 @@ export default function ChartsTab() {
                                 </div>
                             </div>
                             
-                            {forecastData?.correlation_score && (
-                                <div className="flex items-center gap-3">
-                                    <div className="text-right">
-                                        <div className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Model Confidence</div>
-                                        <div className="text-sm font-black text-neonBlue italic">{(forecastData.correlation_score * 100).toFixed(1)}%</div>
-                                    </div>
-                                    <div className="h-8 w-[1px] bg-slate-800"></div>
-                                    <button 
-                                        onClick={() => fetchForecast(activeSymbol)} 
-                                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-neonBlue transition-all"
-                                        title="Rerun forecast match"
-                                    >
-                                        <RefreshCw size={14} className={isFetchingForecast ? 'animate-spin' : ''} />
+                            {/* Decoupled Search Field */}
+                            <div className="flex items-center gap-2">
+                                <form 
+                                    onSubmit={(e) => { e.preventDefault(); fetchForecast(forecastInput); }}
+                                    className="relative"
+                                >
+                                    <input 
+                                        type="text"
+                                        placeholder="Forecast Symbol"
+                                        value={forecastInput}
+                                        onChange={(e) => setForecastInput(e.target.value)}
+                                        className="bg-slate-900 border border-slate-700 rounded py-1 px-3 text-[10px] text-white focus:outline-none focus:border-neonBlue w-32"
+                                    />
+                                    <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-neonBlue transition-colors">
+                                        <Search size={10} />
                                     </button>
-                                </div>
-                            )}
+                                </form>
+
+                                <div className="h-8 w-[1px] bg-slate-800 mx-1"></div>
+
+                                {forecastData?.correlation_score && (
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-right">
+                                            <div className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Model Confidence</div>
+                                            <div className="text-sm font-black text-neonBlue italic">{(forecastData.correlation_score * 100).toFixed(1)}%</div>
+                                        </div>
+                                        <div className="h-8 w-[1px] bg-slate-800"></div>
+                                        <button 
+                                            onClick={() => fetchForecast(forecastInput || activeSymbol)} 
+                                            className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-neonBlue transition-all"
+                                            title="Rerun forecast match"
+                                        >
+                                            <RefreshCw size={14} className={isFetchingForecast ? 'animate-spin' : ''} />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {isFetchingForecast ? (
@@ -747,7 +768,7 @@ export default function ChartsTab() {
                                 {['NSE:RELIANCE', 'NSE:TCS', 'NASDAQ:NVDA', 'NSE:INFY', 'NSE:HDFCBANK'].map(sym => (
                                     <button
                                         key={sym}
-                                        onClick={() => { setActiveSymbol(sym); fetchMistralThesis(sym); fetchForecast(sym); }}
+                                        onClick={() => { setActiveSymbol(sym); fetchMistralThesis(sym); }}
                                         className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold transition-all border ${activeSymbol === sym
                                                 ? 'bg-sky-600/20 text-sky-400 border-sky-500/50'
                                                 : 'bg-slate-900/40 text-slate-500 border-transparent hover:border-slate-700'
