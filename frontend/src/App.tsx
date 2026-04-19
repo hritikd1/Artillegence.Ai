@@ -320,7 +320,7 @@ function App() {
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-1 flex items-center gap-3 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]">
             <img src="/logo-icon.png" alt="Artillegence AI" className="w-10 h-10 min-w-[40px] flex-shrink-0 object-cover rounded-lg shadow-[0_0_15px_rgba(56,189,248,0.4)]" />
-            Artillegence <span className="text-neonBlue font-light">Intelligence v4.0</span>
+            Artillegence <span className="text-neonBlue font-light">Intelligence</span>
           </h1>
           <p className="text-slate-400 text-sm font-medium">AI-Powered Stock Market News Intelligence System</p>
         </div>

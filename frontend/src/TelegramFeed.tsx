@@ -56,6 +56,41 @@ export default function TelegramFeed({ data }: { data?: any }) {
                 </div>
             </div>
 
+            <div className="text-[9px] text-slate-500 tracking-widest font-bold mb-2">ADD SOURCE</div>
+            <div className="flex gap-2 mb-4">
+                <input 
+                    type="text" 
+                    placeholder="Paste link (t.me/slug or website)..."
+                    className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-md px-3 py-1.5 text-[10px] text-white focus:outline-none focus:border-neonBlue transition-colors"
+                    onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                            const val = (e.currentTarget as HTMLInputElement).value;
+                            if (val) {
+                                try {
+                                    const resp = await fetch(`${window.location.origin}/api/add_intel_source`, {
+                                        method: 'POST',
+                                        headers: { 
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                        },
+                                        body: JSON.stringify({ url: val })
+                                    });
+                                    const data = await resp.json();
+                                    if (data.status === 'success') {
+                                        (e.target as HTMLInputElement).value = '';
+                                        alert(data.message);
+                                    } else {
+                                        alert(data.error || 'Failed to add source');
+                                    }
+                                } catch (err) {
+                                    alert('Error connecting to intelligence API');
+                                }
+                            }
+                        }
+                    }}
+                />
+            </div>
+
             <div className="text-[9px] text-slate-500 tracking-widest font-bold mb-2">RECENT DISPATCHES</div>
 
             <div className="flex-1 overflow-y-auto space-y-2 scrollbar-thin pr-1">

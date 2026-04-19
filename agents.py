@@ -265,21 +265,27 @@ async def news_scanner_cycle():
     topics = [
         ("Stock Market", "Indian stock market today"),
         ("Economy", "India economy news"),
-        ("Banking", "India banking RBI"),
-        ("IT Tech", "India IT technology stocks"),
-        ("Energy", "crude oil India energy"),
-        ("Pharma", "pharma stocks India"),
-        ("Auto", "automobile stocks India"),
-        ("Infra", "infrastructure stocks India"),
-        ("Global", "global markets impact"),
+        ("Global", "global markets geopolitics impact"),
     ]
 
-    # Fetch from both Bing RSS and Google News RSS, then merge
-    bing_articles = await fetch_rss(topics, limit=5, hours=6)
-    gn_articles = await fetch_google_news(topics[:5], limit=5, hours=6)
-    gn_top = await fetch_google_news_topics(["top_stories", "business"], limit=8, hours=6)
-    all_articles = bing_articles + gn_articles + gn_top
-    unique = deduplicate(all_articles)[:25]
+    # Specialized feeds + topics
+    bing_articles = await fetch_rss(topics, limit=4, hours=6)
+    gn_articles = await fetch_google_news(topics[:2], limit=4, hours=6)
+    
+    # NEW: Authority global sources
+    aj_rss = GoogleRSSFeed("Al Jazeera", "rss", "world news", country="US")
+    aj_rss.feed_url = "https://www.aljazeera.com/xml/rss/all.xml"
+    aj_articles = await aj_rss.fetch_data(limit=5, hours=8)
+
+    gn_rss = GoogleRSSFeed("Global News", "rss", "world", country="CA")
+    gn_rss.feed_url = "https://globalnews.ca/world/feed/"
+    gn_articles_extra = await gn_rss.fetch_data(limit=5, hours=8)
+
+    # Google News specific top stories
+    gn_top = await fetch_google_news_topics(["top_stories", "india", "business"], limit=10, hours=8)
+    
+    all_articles = bing_articles + gn_articles + aj_articles + gn_articles_extra + gn_top
+    unique = deduplicate(all_articles)[:40]
 
     if not unique:
         print("   No articles found")
@@ -638,14 +644,32 @@ IMPORTANT: Only cite these headlines. Write in plain text, no markdown."""
 async def telegram_scanner_cycle():
     print("\n [TELEGRAM RAW SCANNER] Fetching live intel...")
     try:
-        channels = ["CIG_telegram", "idfofficial", "rnintel", "QudsNen", "wfwitness"]
+        base_channels = ["CIG_telegram", "idfofficial", "rnintel", "QudsNen", "wfwitness"]
+        
+        # Load custom channels from DB
+        try:
+            custom_entries = db.get_active_custom_sources(source_type="telegram")
+            # Extract slug from t.me/slug or @slug or just slug
+            for entry in custom_entries:
+                url = entry['url']
+                slug = url.split('/')[-1].replace('@', '')
+                if slug and slug not in base_channels:
+                    base_channels.append(slug)
+        except Exception as e:
+            print(f"   [DB] Error loading custom channels: {e}")
+
         all_tg_data = []
-        for ch in channels:
+        for ch in base_channels:
             try:
                 tg_scraper = TelegramChannelScraper(name=ch, source_type="Telegram Intelligence", channel_slug=ch)
-                data = await tg_scraper.fetch_data(limit=10, hours=6)
-                if data:
-                    all_tg_data.extend(data)
+                data = await tg_scraper.fetch_data(limit=10, hours=8) # Increased window to ensure diversity
+                # SOURCE DIVERSITY: Cap items per channel if we have many channels
+                if len(base_channels) > 3:
+                     all_tg_data.extend(data[:4]) # Keep only top 4 freshest from each
+                else:
+                     all_tg_data.extend(data)
+                
+                db.mark_source_scanned(ch) # Track local scan if it was a custom one
             except Exception as e:
                 print(f"   Error scraping {ch}: {e}")
                 
@@ -875,7 +899,8 @@ async def google_trends_tracker_cycle():
             for t in trending_searches[:10]
         ])
 
-        prompt = f"""You are analyzing Google search trends in India. Search interest spikes often precede big stock moves.
+        prompt = f"""You are an elite Indian consumer sentiment analyst at Artillegence Intelligence.
+Analyze these search patterns to extract deep 'mentality signals' from the Indian public.
 
 STOCK SEARCH INTEREST (current vs 7-day average):
 {spike_text}
@@ -883,13 +908,14 @@ STOCK SEARCH INTEREST (current vs 7-day average):
 TOP TRENDING SEARCHES IN INDIA TODAY:
 {trending_text}
 
-Based on this data:
-1) SPIKE ALERTS  Which stocks have unusual search interest and what might it indicate?
-2) TRENDING ANALYSIS  Are any trending searches related to markets/stocks? What could they mean?
-3) INVESTOR SIGNAL  What should investors watch based on these search patterns?
-4) PREDICTION  Which stocks might see big moves based on search interest alone?
+Your analysis MUST cover:
+1) CONSUMER MENTALITY: What are people thinking/fearing? (e.g. "80% of retail interest is shifting toward defensive gold hedges"). Use percentages to describe 'mental weight'.
+2) DEMAND & SUPPLY: Are there search patterns suggesting a shortage or a surge in demand for any specific commodity or service?
+3) BUSINESS OPPORTUNITY: Identify 1-2 specific business opportunities or trading setups that emerge from this search volume.
+4) PERCENTAGE MENTALITY: Estimate the percentage of 'Greed vs Fear' in the searched topics.
 
-IMPORTANT: Only reference the data provided. Write in plain text, no markdown."""
+Format your response as a professional intelligence brief. Citations are mandatory.
+Write in clean plain text, no markdown."""
 
         summary = await call_mistral(prompt)
 

@@ -4,6 +4,8 @@ import aiohttp
 import asyncio
 from datetime import datetime
 import time
+import json
+import re
 
 # Load environment variables
 load_dotenv()
@@ -377,9 +379,7 @@ Provide a complete trading thesis for this stock."""
                 'response_format': {"type": "json_object"}
             }
 
-            from datetime import datetime
-            import aiohttp
-            import json
+            # Helper imports removed from here to prevent shadowing issues
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.api_url, headers=headers, json=payload, timeout=60) as response:
                     if response.status == 200:

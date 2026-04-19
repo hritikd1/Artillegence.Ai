@@ -235,6 +235,19 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
         } catch { return []; }
     });
 
+    // Auto-rerun latest query on mount if it exists
+    useEffect(() => {
+        const lastQuery = localStorage.getItem('artillegence_last_custom_query');
+        if (lastQuery && customItems.length === 0) {
+            setCustomInput(lastQuery);
+            // Delay slightly to ensure component is ready
+            setTimeout(() => {
+                const btn = document.getElementById('btn-track-custom');
+                if (btn) btn.click();
+            }, 1000);
+        }
+    }, []);
+
     // Save custom items to localStorage
     useEffect(() => {
         localStorage.setItem('artillegence_custom_watchlist', JSON.stringify(customItems));
@@ -293,6 +306,7 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
         if (!customInput.trim() || isSearching) return;
         setIsSearching(true);
         const query = customInput;
+        localStorage.setItem('artillegence_last_custom_query', query);
         const loc = getLocationForKeyword(query);
         // Slight random offset so multiple items at same exchange don't overlap
         const offset = () => (Math.random() - 0.5) * 0.8;
@@ -553,6 +567,7 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
                                 autoFocus
                             />
                             <button
+                                id="btn-track-custom"
                                 onClick={handleAddCustom}
                                 disabled={!customInput.trim() || isSearching}
                                 className="px-2 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 rounded text-white text-[9px] font-bold border border-amber-500/50 flex items-center gap-1 whitespace-nowrap min-w-[70px] justify-center"

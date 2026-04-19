@@ -460,6 +460,16 @@ class TelegramChannelScraper(NewsSource):
                         if time_tag and time_tag.get('datetime'):
                             timestamp = time_tag.get('datetime')
                             
+                    # Extract Image if present
+                    image_url = ''
+                    photo_wrap = msg.find('a', class_='tgme_widget_message_photo_wrap')
+                    if photo_wrap:
+                        # Extract the background-image URL from style attribute
+                        style = photo_wrap.get('style', '')
+                        img_match = re.search(r"url\('(.+?)'\)", style)
+                        if img_match:
+                            image_url = img_match.group(1)
+
                     page_results.append({
                         'title': f"Intel Update from {self.channel_slug}",
                         'snippet': text,
@@ -468,7 +478,7 @@ class TelegramChannelScraper(NewsSource):
                         'telegram_post_id': post_id,
                         'source_type': self.source_type,
                         'timestamp': timestamp,
-                        'image': ''
+                        'image': image_url
                     })
                 
                 results.extend(page_results)

@@ -249,14 +249,34 @@ class CustomSearchRequest(BaseModel):
 
 @app.post("/api/custom_search")
 async def custom_search(request: CustomSearchRequest, _user=Depends(require_auth)):
-    """Scrape live news for a custom topic and generate an AI summary."""
+    """Trigger a one-off LLM search/analysis for a user query."""
     try:
         from llm_analyzer import MistralAnalyzer
         analyzer = MistralAnalyzer()
-        result = await analyzer.analyze_custom_search(request.query)
+        result = await analyzer.analyze_custom_query(request.query)
         return result
     except Exception as e:
-        return {"error": str(e), "query": request.query, "thesis": f"Error: {e}"}
+        return {"error": str(e)}
+
+class AddSourceRequest(BaseModel):
+    url: str
+
+@app.post("/api/add_intel_source")
+async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth)):
+    """Add a new link (Telegram/Web) to the global background scanner."""
+    url = request.url.strip()
+    if not url:
+        return {"error": "Empty URL"}
+    
+    source_type = "website"
+    if "t.me/" in url.lower() or url.startswith("@"):
+        source_type = "telegram"
+    
+    try:
+        db.save_custom_source(url, source_type, added_by=_user.get('email', 'User'))
+        return {"status": "success", "message": f"{source_type.title()} source added to intelligence loop."}
+    except Exception as e:
+        return {"error": str(e)}
 
 class StockAnalysisRequest(BaseModel):
     symbol: str

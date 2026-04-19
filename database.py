@@ -80,9 +80,20 @@ def init_db():
                 recorded_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS custom_sources (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                url         TEXT UNIQUE NOT NULL,
+                source_type TEXT NOT NULL, -- 'telegram' or 'website'
+                added_by    TEXT,
+                added_at    TEXT NOT NULL,
+                last_scanned TEXT,
+                is_active   INTEGER DEFAULT 1
+            );
+
             CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent);
             CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
+            CREATE INDEX IF NOT EXISTS idx_custom_active ON custom_sources(is_active);
         """)
     print("[DB] Artillegence database initialised at", DB_PATH)
 
@@ -279,6 +290,33 @@ def build_memory_context(agent: str) -> str:
         f"{lines}\n"
         "=== END OF MEMORY  use only the headlines below for NEW analysis ===\n"
     )
+
+
+def save_custom_source(url: str, source_type: str, added_by: str = "Admin"):
+    """Save a user-added custom source (Telegram or Web)."""
+    # Clean URL: strip whitespace and trailing slashes
+    url = url.strip().rstrip('/')
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO custom_sources(url, source_type, added_by, added_at)
+               VALUES(?, ?, ?, ?)
+               ON CONFLICT(url) DO UPDATE SET is_active = 1""",
+            (url, source_type, added_by, datetime.now().isoformat())
+        )
+
+def get_active_custom_sources(source_type: Optional[str] = None):
+    """Retrieve all active custom monitoring sources."""
+    with get_conn() as conn:
+        if source_type:
+            cur = conn.execute("SELECT * FROM custom_sources WHERE source_type = ? AND is_active = 1", (source_type,))
+        else:
+            cur = conn.execute("SELECT * FROM custom_sources WHERE is_active = 1")
+        return [dict(row) for row in cur.fetchall()]
+
+def mark_source_scanned(url: str):
+    """Update the last_scanned timestamp for a source."""
+    with get_conn() as conn:
+        conn.execute("UPDATE custom_sources SET last_scanned = ? WHERE url = ?", (datetime.now().isoformat(), url))
 
 
 #  Bootstrap on import 
