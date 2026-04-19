@@ -6,8 +6,42 @@ import {
 } from 'lucide-react';
 import { apiPost } from './api';
 import Plotly from 'plotly.js-dist-min';
-import createPlotComponent from 'react-plotly.js/factory';
-const Plot = createPlotComponent(Plotly);
+
+/* ─── Robust Plotly Loader ─── */
+function SafePlot({ component, ...props }: any) {
+    const P = component;
+    if (!P) {
+        return (
+            <div className="h-[380px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+                <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
+                <p className="text-xs font-bold tracking-widest text-neonBlue/80">INITIALIZING AI ENGINE...</p>
+                <p className="text-[10px]">Preparing high-fidelity visualization layer</p>
+            </div>
+        );
+    }
+    try {
+        const data = props.data || [];
+        const hasValidData = Array.isArray(data) && data.length > 0 && data.some(d => d.x && d.x.length > 0);
+        if (!hasValidData) {
+            return (
+                <div className="h-[380px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+                    <BrainCircuit size={24} className="mb-2 opacity-30" />
+                    <p className="text-xs font-bold tracking-widest">DATA VECTOR MISMATCH</p>
+                    <p className="text-[10px]">The model couldn't find a high-confidence match for this symbol.</p>
+                </div>
+            );
+        }
+        return <P {...props} />;
+    } catch (err) {
+        return (
+            <div className="h-[380px] flex flex-col items-center justify-center bg-red-950/20 text-red-400 rounded-xl border border-red-900/30">
+                <AlertTriangle size={24} className="mb-2" />
+                <p className="text-xs font-bold tracking-widest uppercase">SafeGuard Active</p>
+                <p className="text-[10px] text-slate-400">Rendering error caught. App remains stable.</p>
+            </div>
+        );
+    }
+}
 
 /* ─── Types ─── */
 interface ChartAnalysis {
@@ -145,6 +179,23 @@ export default function ChartsTab() {
     const [forecastData, setForecastData] = useState<any>(null);
     const [forecastInput, setForecastInput] = useState('');
     const [isFetchingForecast, setIsFetchingForecast] = useState(false);
+    const [PlotComponent, setPlotComponent] = useState<any>(null);
+
+    // Robust Plotly Loader
+    useEffect(() => {
+        let isMounted = true;
+        const loadPlotly = async () => {
+            try {
+                const factory = (await import('react-plotly.js/factory')).default;
+                const created = factory(Plotly);
+                if (isMounted) setPlotComponent(() => created);
+            } catch (err) {
+                console.error("Critical Plotly Load Error:", err);
+            }
+        };
+        loadPlotly();
+        return () => { isMounted = false; };
+    }, []);
 
     useEffect(() => {
         if (chatEndRef.current) {
@@ -657,9 +708,11 @@ export default function ChartsTab() {
                             </div>
                         ) : forecastData ? (
                             <div className="w-full overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40 relative">
-                                <Plot
+                                <SafePlot
+                                    component={PlotComponent}
                                     data={[
-                                        {
+                                        // Robust check for history object
+                                        ...(forecastData.history && forecastData.history.date ? [{
                                             x: forecastData.history.date,
                                             open: forecastData.history.open,
                                             high: forecastData.history.high,
@@ -669,8 +722,9 @@ export default function ChartsTab() {
                                             name: 'Market Price',
                                             increasing: { line: { color: '#22c55e', width: 1.5 } },
                                             decreasing: { line: { color: '#ef4444', width: 1.5 } },
-                                        },
-                                        {
+                                        }] : []),
+                                        // Robust check for forecast object
+                                        ...(forecastData.forecast && forecastData.forecast.date ? [{
                                             x: forecastData.forecast.date,
                                             y: forecastData.forecast.price,
                                             type: 'scatter',
@@ -678,7 +732,7 @@ export default function ChartsTab() {
                                             name: 'AI Projection',
                                             line: { color: '#facc15', width: 3, dash: 'dot', shape: 'spline' },
                                             fill: 'none'
-                                        }
+                                        }] : [])
                                     ]}
                                     layout={{
                                         autosize: true,
