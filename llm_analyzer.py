@@ -300,6 +300,7 @@ Provide a complete trading thesis for this stock."""
 
         # Step 1.5: Scrape web snippets for factual data (prices, dates) via DDG Lite
         web_snippets = []
+        try:
             ddg_url = "https://html.duckduckgo.com/html/"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             post_data = {"q": query}
