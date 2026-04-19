@@ -587,7 +587,7 @@ class GoogleTrendsScraper:
                             "timestamp": datetime.now().isoformat()
                         })
                     
-                    await asyncio.sleep(1)  # Rate limit courtesy
+                    await asyncio.sleep(3)  # Increased rate limit courtesy
                 except Exception as e:
                     print(f"   Google Trends batch error: {e}")
                     
