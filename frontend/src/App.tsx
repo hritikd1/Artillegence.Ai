@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
 import { apiGet, apiPost } from './api'
 
-const ParticleGlobe = lazy(() => import('./ParticleGlobe'));
+const EarthMap = lazy(() => import('./EarthMap'));
 const ChartsTab = lazy(() => import('./ChartsTab'));
 
 interface GeoEvent {
@@ -364,10 +364,10 @@ function App() {
             <Suspense fallback={
               <div className="flex flex-col items-center justify-center h-full bg-slate-900/20 backdrop-blur-sm">
                 <Globe className="animate-spin-slow text-neonBlue mb-4" size={48} />
-                <span className="text-neonBlue font-bold tracking-[0.2em] text-xs">DECODING 3D INTELLIGENCE GLOBE...</span>
+                <span className="text-slate-500 ml-3">Loading Earth Map...</span>
               </div>
             }>
-              <ParticleGlobe events={geoEvents} />
+              <EarthMap events={geoEvents} />
             </Suspense>
           </div>
           <div className="lg:col-span-1">
