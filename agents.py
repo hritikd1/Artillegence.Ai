@@ -160,8 +160,11 @@ async def website_scanner_cycle():
                     events_list = [{"headline": f"Update from {url}", "summary": result[:500], "lat": 0, "lng": 0, "city": "", "country": ""}]
                 
                 geo_events_to_save = []
+                import urllib.parse
                 for ev in events_list[:5]:
                     eid = f"webscan-{uuid.uuid4().hex[:8]}"
+                    domain = urllib.parse.urlparse(url).netloc.replace('www.', '').split('.')[0].title()
+                    cat_name = f"⭐ {domain}" if domain else "⭐ User Custom"
                     geo_ev = {
                         "id": eid,
                         "lat": ev.get("lat", 0),
@@ -175,7 +178,7 @@ async def website_scanner_cycle():
                         "severity": ev.get("severity", "medium"),
                         "timestamp": datetime.now().isoformat(),
                         "section": "web_monitoring",
-                        "category": "⭐ User Custom"
+                        "category": cat_name
                     }
                     geo_events_to_save.append(geo_ev)
                 

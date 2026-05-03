@@ -443,7 +443,7 @@ function App() {
   const latestTelegram = [...events].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
   const websiteEvents = events.filter(e => e.agent === 'website_scanner').map(e => ({
     agent: 'website_scanner',
-    headline: e.title || e.headline,
+    title: e.title || e.headline,
     summary: e.summary,
     timestamp: e.timestamp,
     url: e.url || e.source_link

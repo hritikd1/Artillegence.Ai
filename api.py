@@ -153,6 +153,21 @@ def extract_geo_events(event: dict):
                         raw_source = matching_item.get('source', 'CIG_telegram')
                         clean_slug = raw_source.replace('Telegram: ', '') if isinstance(raw_source, str) else 'CIG_telegram'
 
+                        text_for_cat = (matching_item.get('title', '') + ' ' + matching_item.get('snippet', '')).lower()
+                        
+                        # Determine Category: If it's a standard channel, use general categories. If custom, use the channel name.
+                        known_channels = ["cig_telegram", "idfofficial", "rnintel", "qudsnen", "wfwitness"]
+                        if clean_slug.lower() not in known_channels:
+                            # It's a custom user-added Telegram channel
+                            if 'india' in text_for_cat or 'stock' in text_for_cat:
+                                cat = 'Indian Stock News'
+                            else:
+                                cat = f"⭐ {clean_slug.title()}"
+                        else:
+                            cat = 'Geopolitics & Telegram'
+                            if 'india' in text_for_cat or 'nifty' in text_for_cat or 'sensex' in text_for_cat: 
+                                cat = 'Indian Stock News'
+
                         found.append({
                             'id': stable_id,
                             'lat': lat, 'lng': lng,
@@ -164,8 +179,9 @@ def extract_geo_events(event: dict):
                             'source': clean_slug,
                             'url': matching_item.get('url', ''),
                             'severity': severity,
-                            'category': 'Geopolitics & Telegram',
+                            'category': cat,
                             'timestamp': matching_item.get('timestamp') or datetime.now().isoformat()
+
                         })
                     except (ValueError, TypeError): continue
         return found
@@ -344,6 +360,9 @@ async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth
                             geo_events_to_save = []
                             for i, ev in enumerate(events_list[:5]):
                                 eid = f"websrc-{uuid.uuid4().hex[:8]}"
+                                import urllib.parse
+                                domain = urllib.parse.urlparse(url).netloc.replace('www.', '').split('.')[0].title()
+                                cat_name = f"⭐ {domain}" if domain else "⭐ User Custom"
                                 geo_ev = {
                                     "id": eid,
                                     "lat": ev.get("lat", 0),
@@ -357,7 +376,7 @@ async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth
                                     "severity": ev.get("severity", "medium"),
                                     "timestamp": datetime.now().isoformat(),
                                     "section": "web_monitoring",
-                                    "category": "⭐ User Custom"
+                                    "category": cat_name
                                 }
                                 geo_events_to_save.append(geo_ev)
                                 scraped_items.append(geo_ev)
