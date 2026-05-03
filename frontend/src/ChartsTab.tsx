@@ -98,63 +98,82 @@ function ConfidenceDot({ level }: { level?: string }) {
     return <span className={`inline-block w-2 h-2 rounded-full ${color} mr-1.5`} />;
 }
 
-const TradingViewWidget = React.memo(({ symbol }: { symbol: string }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
+const SafeCandleChart = React.memo(({ symbol, PlotComponent }: { symbol: string, PlotComponent: any }) => {
+    const [candleData, setCandleData] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (!containerRef.current) return;
-        
-        containerRef.current.innerHTML = '';
-        
-        const widgetWrapper = document.createElement('div');
-        widgetWrapper.className = 'tradingview-widget-container__widget';
-        widgetWrapper.style.height = 'calc(100% - 32px)';
-        widgetWrapper.style.width = '100%';
-        containerRef.current.appendChild(widgetWrapper);
-        
-        const script = document.createElement('script');
-        script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-        script.type = "text/javascript";
-        script.async = true;
-        script.innerHTML = JSON.stringify({
-            "allow_symbol_change": true,
-            "calendar": false,
-            "details": false,
-            "hide_side_toolbar": true,
-            "hide_top_toolbar": false,
-            "hide_legend": false,
-            "hide_volume": false,
-            "hotlist": false,
-            "interval": "D",
-            "locale": "en",
-            "save_image": true,
-            "style": "1",
-            "symbol": symbol,
-            "theme": "dark",
-            "timezone": "Etc/UTC",
-            "backgroundColor": "#0F0F0F",
-            "gridColor": "rgba(242, 242, 242, 0.06)",
-            "watchlist": [],
-            "withdateranges": false,
-            "range": "ALL",
-            "compareSymbols": [],
-            "studies": [],
-            "autosize": true
-        });
-        containerRef.current.appendChild(script);
-        
-        const copyrightStr = document.createElement('div');
-        copyrightStr.className = 'tradingview-widget-copyright';
-        copyrightStr.innerHTML = `<a href="https://www.tradingview.com/symbols/${encodeURIComponent(symbol)}/" rel="noopener nofollow" target="_blank"><span class="blue-text">${symbol} stock chart</span></a><span class="trademark"> by TradingView</span>`;
-        containerRef.current.appendChild(copyrightStr);
-        
+        const fetchCandles = async () => {
+            if (!symbol) return;
+            setLoading(true);
+            try {
+                const data = await apiGet<any>(`/api/candle_data?symbol=${symbol}`);
+                setCandleData(data);
+            } catch (err) {
+                console.error("Candle fetch error:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCandles();
     }, [symbol]);
 
-    return (
-        <div className="tradingview-widget-container" style={{ height: '100%', width: '100%' }} ref={containerRef}>
-            <div className="tradingview-widget-container__widget" style={{ height: 'calc(100% - 32px)', width: '100%' }}></div>
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+                <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
+                <p className="text-[10px] font-bold tracking-widest text-neonBlue/80 uppercase">Streaming Market Data...</p>
+            </div>
+        );
+    }
+
+    if (!candleData || candleData.error) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+                <BrainCircuit size={24} className="mb-2 opacity-30" />
+                <p className="text-xs font-bold tracking-widest">DATA UNAVAILABLE</p>
+                <p className="text-[10px]">{candleData?.error || "Could not fetch OHLC data for this symbol."}</p>
+            </div>
+        );
+    }
+
+    const data = [
+        {
+            x: candleData.dates,
+            open: candleData.open,
+            high: candleData.high,
+            low: candleData.low,
+            close: candleData.close,
+            type: 'candlestick',
+            name: symbol,
+            increasing: { line: { color: '#10b981', width: 1.5 } },
+            decreasing: { line: { color: '#ef4444', width: 1.5 } }
+        }
+    ];
+
+    const layout = {
+        autosize: true,
+        dragmode: 'zoom',
+        showlegend: false,
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#94a3b8', size: 10 },
+        xaxis: {
+            rangeslider: { visible: false },
+            gridcolor: 'rgba(51, 65, 85, 0.2)',
+            zeroline: false,
+            tickfont: { size: 9, color: '#64748b' }
+        },
+        yaxis: {
+            gridcolor: 'rgba(51, 65, 85, 0.2)',
+            zeroline: false,
+            side: 'right',
+            tickfont: { size: 9, color: '#64748b' }
+        },
+        margin: { t: 20, b: 30, l: 10, r: 50 },
+    };
+
+    return <SafePlot component={PlotComponent} data={data} layout={layout} config={{ responsive: true, displayModeBar: false }} />;
 });
 
 /* ─── Main Component ─── */
@@ -643,7 +662,17 @@ export default function ChartsTab() {
                                 <span className="text-[10px] font-black text-white tracking-widest">AGENT SCANNING LIVE FEEDS...</span>
                             </div>
                         )}
-                        <TradingViewWidget symbol={activeSymbol} />
+                        <div className="glass-panel h-full border border-slate-700/50 relative overflow-hidden flex flex-col p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-black text-white tracking-widest uppercase italic flex items-center gap-2">
+                                    <TrendingUp className="text-neonBlue" size={16} /> LIVE MARKET CHART
+                                </h3>
+                                <span className="text-[9px] font-bold text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded uppercase">{activeSymbol}</span>
+                            </div>
+                            <div className="flex-1 min-h-[400px]">
+                                <SafeCandleChart symbol={activeSymbol} PlotComponent={PlotComponent} />
+                            </div>
+                        </div>
                     </div>
 
                     {/* 🚀 AI Predictive Forecast Integration (PlotyForecast Project) */}

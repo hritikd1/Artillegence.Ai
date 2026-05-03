@@ -374,7 +374,25 @@ Provide a complete trading thesis for this stock."""
                             parsed_json = {"headline": f"Monitoring: {query}", "thesis": result_text, "lat": None, "lng": None, "city": "Global", "country": ""}
                         
                         headline = parsed_json.get("headline", f"Monitoring: {query}")
-                        
+
+                        # Persist to geo_events so it appears on the live map
+                        if parsed_json.get("lat") and parsed_json.get("lng"):
+                            import uuid
+                            db.save_geo_events([{
+                                "id": f"custom-{uuid.uuid4().hex[:8]}",
+                                "lat": parsed_json["lat"],
+                                "lng": parsed_json["lng"],
+                                "city": parsed_json.get("city", "Global"),
+                                "country": parsed_json.get("country", ""),
+                                "headline": headline,
+                                "summary": parsed_json.get("thesis", ""),
+                                "source": "User Custom",
+                                "url": news_items[0]['url'] if news_items else "",
+                                "severity": "medium",
+                                "timestamp": datetime.now().isoformat(),
+                                "section": "user_custom"
+                            }])
+
                         return {
                             "query": query,
                             "headline": headline,

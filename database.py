@@ -90,6 +90,15 @@ def init_db():
                 is_active   INTEGER DEFAULT 1
             );
 
+            CREATE TABLE IF NOT EXISTS user_custom_searches (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                query       TEXT UNIQUE NOT NULL,
+                added_by    TEXT,
+                added_at    TEXT NOT NULL,
+                last_run    TEXT,
+                is_active   INTEGER DEFAULT 1
+            );
+
             CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent);
             CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
@@ -317,6 +326,29 @@ def mark_source_scanned(url: str):
     """Update the last_scanned timestamp for a source."""
     with get_conn() as conn:
         conn.execute("UPDATE custom_sources SET last_scanned = ? WHERE url = ?", (datetime.now().isoformat(), url))
+
+#  User Custom Searches 
+
+def save_user_custom_search(query: str, added_by: str = "User"):
+    """Save a user-added custom search query for automated monitoring."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_custom_searches(query, added_by, added_at)
+               VALUES(?, ?, ?)
+               ON CONFLICT(query) DO UPDATE SET is_active = 1""",
+            (query.strip(), added_by, datetime.now().isoformat())
+        )
+
+def get_active_user_custom_searches():
+    """Retrieve all active user custom searches for the monitoring loop."""
+    with get_conn() as conn:
+        cur = conn.execute("SELECT * FROM user_custom_searches WHERE is_active = 1")
+        return [dict(row) for row in cur.fetchall()]
+
+def mark_custom_search_run(query: str):
+    """Update the last_run timestamp for a custom search."""
+    with get_conn() as conn:
+        conn.execute("UPDATE user_custom_searches SET last_run = ? WHERE query = ?", (datetime.now().isoformat(), query))
 
 
 #  Bootstrap on import 

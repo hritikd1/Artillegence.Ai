@@ -462,7 +462,7 @@ function App() {
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-1 flex items-center gap-3 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]">
             <img src="/logo-icon.png" alt="Artillegence AI" className="w-10 h-10 min-w-[40px] flex-shrink-0 object-cover rounded-lg shadow-[0_0_15px_rgba(56,189,248,0.4)]" />
-            Artillegence <span className="text-neonBlue font-light">Intelligence</span>
+            Artillegence <span className="text-neonBlue font-light">AI</span>
           </h1>
           <p className="text-slate-400 text-sm font-medium">AI-Powered Stock Market News Intelligence System</p>
         </div>
@@ -563,14 +563,11 @@ function App() {
           </div>
         </div>
 
-        {/* ── Advanced Features Row (Google Trends / Signal Tracker / Event Chain) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── Advanced Features Row (Google Trends / Event Chain) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Google Trends Intelligence */}
           <GoogleTrendsWidget data={trendsData} />
-
-          {/* Signal Accuracy Scorecard */}
-          <SignalScorecard data={signalData} />
 
           {/* Event Chain Prediction */}
           <EventChainPredictor
@@ -605,18 +602,10 @@ function App() {
             event={latestTrending} items={latestTrending?.trending_items} placeholder="Analyzing global focus areas..." fullWidth
           />
           <AgentSection
-            icon={<Lightbulb size={16} />} title="STRATEGIC OPPORTUNITIES" subtitle="Deep Insight" accentColor="emerald"
-            event={latestOpportunity} items={latestOpportunity?.sources} placeholder="Calculating multi-order impacts..." fullWidth
+            icon={<Lightbulb size={16} />} title="MARKET RECOMMENDATIONS" subtitle="Reputable Sources" accentColor="emerald"
+            event={latestOpportunity} items={latestOpportunity?.sources} placeholder="Cross-referencing authoritative financial reports..." fullWidth
           />
         </div>
-
-        {/* Opportunity Finder */}
-        <AgentSection
-          icon={<Lightbulb className="text-emerald-400" size={20} />}
-          title="INVESTMENT OPPORTUNITIES" subtitle="AI-picked stocks based on cross-referenced analysis"
-          accentColor="emerald" event={latestOpportunity} items={undefined}
-          placeholder="Artillegence AI is currently calculating multi-order impacts... signals appearing in ~60s." fullWidth
-        />
 
         {/* Market Deep Dive / Stocks Today */}
         <div className="glass-panel p-5">

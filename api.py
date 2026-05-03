@@ -249,11 +249,15 @@ class CustomSearchRequest(BaseModel):
 
 @app.post("/api/custom_search")
 async def custom_search(request: CustomSearchRequest, _user=Depends(require_auth)):
-    """Trigger a one-off LLM search/analysis for a user query."""
+    """Trigger a one-off LLM search/analysis for a user query and save for monitoring."""
     try:
         from llm_analyzer import MistralAnalyzer
         analyzer = MistralAnalyzer()
-        result = await analyzer.analyze_custom_query(request.query)
+        
+        # Save to DB for background monitoring
+        db.save_user_custom_search(request.query, added_by=_user.get('email', 'User'))
+        
+        result = await analyzer.analyze_custom_search(request.query)
         return result
     except Exception as e:
         return {"error": str(e)}
@@ -401,6 +405,42 @@ async def chat_endpoint(request: ChatRequest, _user=Depends(require_auth)):
 @app.get("/api/status")
 async def get_status():
     return {"status": "online", "system": "Artillegence AI"}
+
+@app.get("/api/candle_data")
+async def get_candle_data(symbol: str, period: str = "1mo", interval: str = "1d"):
+    """Fetch candle data from Yahoo Finance for custom Plotly rendering."""
+    try:
+        raw_ticker = symbol.split(":")[-1] if ":" in symbol else symbol
+        ticker = raw_ticker
+        
+        # Heuristic for Indian stocks
+        if ":" in symbol:
+            if "NSE" in symbol.upper():
+                ticker = raw_ticker + ".NS"
+            elif "BSE" in symbol.upper():
+                ticker = raw_ticker + ".BO"
+        elif not any(x in raw_ticker for x in ["-", "=", "."]):
+            # Default to NSE for plain Indian stock names
+            ticker = raw_ticker + ".NS"
+            
+        print(f"Fetching candle data for {symbol} -> {ticker}")
+            
+        df = yf.download(ticker, period=period, interval=interval, progress=False)
+        if df.empty:
+            return {"error": "No data found for symbol"}
+            
+        # Format for Plotly
+        data = {
+            "dates": df.index.strftime('%Y-%m-%d %H:%M').tolist(),
+            "open": df['Open'].tolist(),
+            "high": df['High'].tolist(),
+            "low": df['Low'].tolist(),
+            "close": df['Close'].tolist(),
+            "volume": df['Volume'].tolist(),
+        }
+        return data
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/agents/status")
 async def get_agent_status(_user=Depends(require_auth)):

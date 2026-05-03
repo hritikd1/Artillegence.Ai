@@ -32,89 +32,129 @@ export function TelegramEmbed({ channelSlug, postId, compact }: { channelSlug: s
 /* Telegram Feed Section */
 export default function TelegramFeed({ data }: { data?: any }) {
     const newsItems = data?.news_items || [];
+    // Show both telegram posts and generic updates (like from website scanner)
     const validPosts = newsItems
-        .filter((item: any) => item.telegram_post_id)
-        .slice(0, 15); // display up to 15 latest posts to prevent UI stuttering
+        .filter((item: any) => item.telegram_post_id || item.agent === 'website_scanner')
+        .slice(0, 20);
+
+    const [adding, setAdding] = useState(false);
+
+    const handleAddSource = async (url: string) => {
+        if (!url) return;
+        setAdding(true);
+        try {
+            const resp = await fetch(`/api/add_intel_source`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ url })
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                alert(data.message);
+            } else {
+                alert(data.error || 'Failed to add source');
+            }
+        } catch (err) {
+            alert('Error connecting to intelligence API');
+        } finally {
+            setAdding(false);
+        }
+    };
 
     return (
-        <div className="glass-panel p-4 h-full flex flex-col" style={{ maxHeight: '520px' }}>
-            <div className="flex items-center justify-between mb-3">
+        <div className="glass-panel p-4 h-full flex flex-col" style={{ maxHeight: '600px' }}>
+            <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <MessageCircle size={16} className="text-sky-400" />
-                    <h3 className="text-xs font-bold text-white tracking-wider">INTEL FEED</h3>
+                    <div className="p-1.5 bg-sky-500/10 rounded border border-sky-500/20">
+                        <MessageCircle size={14} className="text-sky-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase">Global Intel Feed</h3>
+                        <p className="text-[8px] text-slate-500 font-medium">Real-time dispatches & web monitoring</p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <a href="https://t.me/idfofficial" target="_blank" rel="noopener noreferrer" className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1">IDF <ExternalLink size={8} /></a>
-                    <span className="text-slate-600">|</span>
-                    <a href="https://t.me/rnintel" target="_blank" rel="noopener noreferrer" className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1">RNI <ExternalLink size={8} /></a>
-                    <span className="text-slate-600">|</span>
-                    <a href="https://t.me/QudsNen" target="_blank" rel="noopener noreferrer" className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1">Quds <ExternalLink size={8} /></a>
-                    <span className="text-slate-600">|</span>
-                    <a href="https://t.me/wfwitness" target="_blank" rel="noopener noreferrer" className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1">WFW <ExternalLink size={8} /></a>
-                    <span className="text-slate-600">|</span>
-                    <a href="https://t.me/CIG_telegram" target="_blank" rel="noopener noreferrer" className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1">CIG <ExternalLink size={8} /></a>
+                <div className="flex items-center gap-1.5">
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+                    <span className="text-[10px] font-bold text-slate-400">LIVE</span>
                 </div>
             </div>
 
-            <div className="text-[9px] text-slate-500 tracking-widest font-bold mb-2">ADD SOURCE</div>
-            <div className="flex gap-2 mb-4">
-                <input 
-                    type="text" 
-                    placeholder="Paste link (t.me/slug or website)..."
-                    className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-md px-3 py-1.5 text-[10px] text-white focus:outline-none focus:border-neonBlue transition-colors"
-                    onKeyDown={async (e) => {
-                        if (e.key === 'Enter') {
-                            const val = (e.currentTarget as HTMLInputElement).value;
-                            if (val) {
-                                try {
-                                    const resp = await fetch(`${window.location.origin}/api/add_intel_source`, {
-                                        method: 'POST',
-                                        headers: { 
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                        },
-                                        body: JSON.stringify({ url: val })
-                                    });
-                                    const data = await resp.json();
-                                    if (data.status === 'success') {
-                                        (e.target as HTMLInputElement).value = '';
-                                        alert(data.message);
-                                    } else {
-                                        alert(data.error || 'Failed to add source');
-                                    }
-                                } catch (err) {
-                                    alert('Error connecting to intelligence API');
-                                }
+            <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg p-3 mb-4">
+                <div className="text-[9px] text-slate-400 tracking-widest font-bold mb-2 uppercase flex items-center gap-2">
+                    <ExternalLink size={10} className="text-neonBlue" /> Add New Source to Monitor
+                </div>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        placeholder="Telegram link or Website URL..."
+                        className="flex-1 bg-slate-950 border border-slate-700/50 rounded px-3 py-1.5 text-[10px] text-white focus:outline-none focus:border-neonBlue transition-colors"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleAddSource(e.currentTarget.value);
+                                e.currentTarget.value = '';
                             }
-                        }
-                    }}
-                />
+                        }}
+                    />
+                    <button 
+                        className="px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/40 border border-sky-500/30 text-sky-400 text-[10px] font-bold rounded transition-all disabled:opacity-50"
+                        onClick={(e) => {
+                            const input = (e.currentTarget.previousSibling as HTMLInputElement);
+                            handleAddSource(input.value);
+                            input.value = '';
+                        }}
+                        disabled={adding}
+                    >
+                        {adding ? '...' : 'ADD'}
+                    </button>
+                </div>
+                <p className="text-[8px] text-slate-500 mt-2 italic">Scrapes latest news periodically for map plotting & feed</p>
             </div>
 
-            <div className="text-[9px] text-slate-500 tracking-widest font-bold mb-2">RECENT DISPATCHES</div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 scrollbar-thin pr-1">
+            <div className="flex-1 overflow-y-auto space-y-3 scrollbar-thin pr-1">
                 {validPosts.length > 0 ? (
                     validPosts.map((post: any, i: number) => {
+                        if (post.agent === 'website_scanner') {
+                            return (
+                                <div key={`ws-${i}`} className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-lg animate-fade-in">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Web Monitoring Update</span>
+                                        <span className="text-[8px] text-slate-500">{new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <h4 className="text-[11px] font-bold text-white mb-1">{post.title}</h4>
+                                    <p className="text-[10px] text-slate-400 leading-relaxed mb-2">{post.summary}</p>
+                                    <button 
+                                        onClick={() => (window as any).triggerTacticalAdvice(post.title, post.summary)}
+                                        className="text-[9px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors uppercase tracking-tighter"
+                                    >
+                                        ✨ Analyze Impact on Indian Market
+                                    </button>
+                                </div>
+                            );
+                        }
+                        
                         const slug = typeof post.source === 'string' ? post.source.replace('Telegram: ', '') : 'CIG_telegram';
                         return (
-                            <TelegramEmbed
-                                key={post.telegram_post_id + '-' + i}
-                                channelSlug={slug}
-                                postId={post.telegram_post_id}
-                            />
+                            <div key={i} className="animate-fade-in">
+                                <div className="flex items-center justify-between mb-1 px-1">
+                                    <span className="text-[9px] font-bold text-slate-500 tracking-tighter uppercase">{slug}</span>
+                                    <span className="text-[8px] text-slate-600">{new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <TelegramEmbed channelSlug={slug} postId={post.telegram_post_id} compact={true} />
+                            </div>
                         );
                     })
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-500 border border-slate-800/50 rounded-lg bg-slate-900/40 p-6 text-center">
-                        <Radio className="animate-pulse mb-3" size={24} />
-                        <span className="text-sm font-bold text-slate-400">Awaiting Transmissions</span>
-                        <span className="text-xs mt-1">Stand by for live intelligence feed...</span>
+                    <div className="flex flex-col items-center justify-center h-full opacity-40">
+                        <Radio size={32} className="text-slate-600 mb-2 animate-pulse" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Scanning frequency...</p>
                     </div>
                 )}
             </div>
 
-            <div className="mt-2 pt-3 border-t border-slate-800/50 flex items-center justify-between">
+            <div className="mt-4 pt-3 border-t border-slate-800/50 flex items-center justify-between">
                 <span className="text-[9px] text-slate-500">
                     {validPosts.length > 0 ? `${validPosts.length} live posts inside target box` : 'Connecting...'}
                 </span>

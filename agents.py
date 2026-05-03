@@ -94,8 +94,72 @@ async def broadcast(event: dict):
     except Exception as e:
         print(f"   Dashboard broadcast error ({BASE_API_URL}): {e}")
 
+# 
+# AGENT 10: Custom Intelligence Monitor (re-runs user queries)
+# 
+async def custom_intelligence_monitor_cycle():
+    print("\n [CUSTOM MONITOR] Re-scanning user watchlists...")
+    try:
+        queries = db.get_active_user_custom_searches()
+        if not queries:
+            print("   No user custom searches to monitor.")
+            return
+            
+        analyzer = MistralAnalyzer()
+        for q_entry in queries:
+            q = q_entry['query']
+            print(f"   Re-analyzing: {q}")
+            # This will automatically save to geo_events via the updated analyze_custom_search
+            await analyzer.analyze_custom_search(q)
+            db.mark_custom_search_run(q)
+            await asyncio.sleep(5) # avoid flooding
+            
+        print(f"   [CUSTOM MONITOR] Completed monitoring of {len(queries)} topics.")
+    except Exception as e:
+        print(f"   [CUSTOM MONITOR] Error: {e}")
+
+# 
+# AGENT 11: Website Scanner (monitors user-added web links)
+# 
+async def website_scanner_cycle():
+    print("\n [WEBSITE SCANNER] Checking user-added sources...")
+    try:
+        from core_scrapers import WebScraper
+        sources = db.get_active_custom_sources(source_type="website")
+        if not sources:
+            print("   No custom websites to scan.")
+            return
+            
+        analyzer = MistralAnalyzer()
+        for src in sources:
+            url = src['url']
+            print(f"   Scraping source: {url}")
+            content = await WebScraper.scrape_content(url)
+            if content:
+                # Use Mistral to extract intelligence from the raw text
+                prompt = f"Extract any market intelligence, stock moves, or geo-political events from this scraped content: {content[:4000]}"
+                system_msg = "You are an intelligence extractor. Return a concise briefing with location (lat/lng/city) if found."
+                analysis = await call_mistral(prompt, system_msg=system_msg)
+                
+                # Broadcast as an intel feed item
+                payload = {
+                    "agent": "website_scanner",
+                    "title": f"Update from {url}",
+                    "summary": analysis,
+                    "timestamp": datetime.now().isoformat()
+                }
+                await broadcast(payload)
+                db.mark_source_scanned(url)
+            await asyncio.sleep(10)
+            
+        print(f"   [WEBSITE SCANNER] Completed scan of {len(sources)} links.")
+    except Exception as e:
+        print(f"   [WEBSITE SCANNER] Error: {e}")
+
+# 
+# Generic helper to post to internal API.
+# 
 async def post_to_api(endpoint: str, payload: dict):
-    """Generic helper to post to internal API."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -410,11 +474,11 @@ async def opportunity_finder_cycle():
     print("\n [OPPORTUNITY FINDER] Searching...")
     try:
         topics = [
-            ("Undervalued", "undervalued stocks India"),
-            ("Breakout", "breakout stocks India"),
-            ("Growth", "high growth companies India"),
-            ("Small Cap", "small cap mid cap stocks India"),
-            ("IPO", "upcoming IPO India 2026"),
+            ("Undervalued", "site:moneycontrol.com OR site:economictimes.indiatimes.com OR site:livemint.com undervalued stocks India buy recommendations"),
+            ("Breakout", "site:moneycontrol.com OR site:economictimes.indiatimes.com breakout stocks India buy rating"),
+            ("Growth", "site:moneycontrol.com OR site:business-standard.com high growth companies India buy"),
+            ("Small Cap", "site:livemint.com OR site:financialexpress.com small cap mid cap stocks India recommendations"),
+            ("IPO", "upcoming IPO India 2026 rating"),
         ]
 
         articles = await fetch_rss(topics, limit=5, hours=6)
@@ -1107,4 +1171,6 @@ async def start_all_agents():
         run_agent_loop("visual_researcher",       visual_research_cycle,         interval_min=20),
         run_agent_loop("google_news_scanner",     google_news_scanner_cycle,     interval_min=10),
         run_agent_loop("google_trends_tracker",   google_trends_tracker_cycle,   interval_min=20),
+        run_agent_loop("custom_monitor",          custom_intelligence_monitor_cycle, interval_min=60),
+        run_agent_loop("website_scanner",         website_scanner_cycle,         interval_min=60),
     )
