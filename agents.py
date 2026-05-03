@@ -1138,6 +1138,8 @@ agent_status = {
     "visual_researcher":      {"status": "idle", "last_run": None, "cycle_count": 0},
     "google_news_scanner":    {"status": "idle", "last_run": None, "cycle_count": 0},
     "google_trends_tracker":  {"status": "idle", "last_run": None, "cycle_count": 0},
+    "custom_monitor":         {"status": "idle", "last_run": None, "cycle_count": 0},
+    "website_scanner":        {"status": "idle", "last_run": None, "cycle_count": 0},
 }
 
 def get_agent_status():
@@ -1145,6 +1147,9 @@ def get_agent_status():
 
 async def run_agent_loop(name: str, fn, interval_min: int):
     global agent_status
+    # Auto-register if not in status dict (prevents KeyError crash)
+    if name not in agent_status:
+        agent_status[name] = {"status": "idle", "last_run": None, "cycle_count": 0}
     # Removed initial sleep to speed up first-run intelligence population
     while True:
         try:
