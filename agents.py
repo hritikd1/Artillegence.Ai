@@ -130,26 +130,74 @@ async def website_scanner_cycle():
             print("   No custom websites to scan.")
             return
             
-        analyzer = MistralAnalyzer()
         for src in sources:
             url = src['url']
             print(f"   Scraping source: {url}")
-            content = await WebScraper.scrape_content(url)
-            if content:
-                # Use Mistral to extract intelligence from the raw text
-                prompt = f"Extract any market intelligence, stock moves, or geo-political events from this scraped content: {content[:4000]}"
-                system_msg = "You are an intelligence extractor. Return a concise briefing with location (lat/lng/city) if found."
-                analysis = await call_mistral(prompt, system_msg=system_msg)
+            try:
+                content = await WebScraper.scrape_content(url)
+                if not content or len(content.strip()) < 50:
+                    print(f"   No meaningful content from {url}")
+                    continue
+                    
+                # Use Mistral to extract structured geo-events from the content
+                system_msg = (
+                    f"Today is {datetime.now().strftime('%A, %B %d, %Y')}. "
+                    "Extract the TOP 3 most important news/events from this website content. "
+                    "For EACH event: headline, summary (2-3 sentences), lat, lng, city, country, severity (low/medium/high/critical). "
+                    'Respond ONLY in valid JSON: {"events": [{"headline": ..., "summary": ..., "lat": ..., "lng": ..., "city": ..., "country": ..., "severity": ...}]}'
+                )
+                prompt = f"SOURCE: {url}\n\nCONTENT:\n{content[:5000]}"
                 
-                # Broadcast as an intel feed item
-                payload = {
-                    "agent": "website_scanner",
-                    "title": f"Update from {url}",
-                    "summary": analysis,
-                    "timestamp": datetime.now().isoformat()
-                }
-                await broadcast(payload)
+                result = await call_mistral(prompt, system_msg=system_msg)
+                
+                # Parse the response
+                import uuid
+                try:
+                    parsed = json.loads(result)
+                    events_list = parsed.get("events", [])
+                except json.JSONDecodeError:
+                    # If not valid JSON, create a single event with the raw analysis
+                    events_list = [{"headline": f"Update from {url}", "summary": result[:500], "lat": 0, "lng": 0, "city": "", "country": ""}]
+                
+                geo_events_to_save = []
+                for ev in events_list[:5]:
+                    eid = f"webscan-{uuid.uuid4().hex[:8]}"
+                    geo_ev = {
+                        "id": eid,
+                        "lat": ev.get("lat", 0),
+                        "lng": ev.get("lng", 0),
+                        "city": ev.get("city", ""),
+                        "country": ev.get("country", ""),
+                        "headline": ev.get("headline", f"Update from {url}"),
+                        "summary": ev.get("summary", ""),
+                        "source": f"Web: {url}",
+                        "url": url,
+                        "severity": ev.get("severity", "medium"),
+                        "timestamp": datetime.now().isoformat(),
+                        "section": "web_monitoring"
+                    }
+                    geo_events_to_save.append(geo_ev)
+                
+                # Save to DB for map plotting
+                if geo_events_to_save:
+                    db.save_geo_events(geo_events_to_save)
+                
+                # Broadcast to intel feed
+                for geo_ev in geo_events_to_save:
+                    payload = {
+                        "agent": "website_scanner",
+                        "title": geo_ev["headline"],
+                        "summary": geo_ev["summary"],
+                        "timestamp": geo_ev["timestamp"],
+                        "url": url
+                    }
+                    await broadcast(payload)
+                    
                 db.mark_source_scanned(url)
+                print(f"   Extracted {len(geo_events_to_save)} events from {url}")
+                
+            except Exception as inner_e:
+                print(f"   Error scraping {url}: {inner_e}")
             await asyncio.sleep(10)
             
         print(f"   [WEBSITE SCANNER] Completed scan of {len(sources)} links.")

@@ -281,7 +281,7 @@ class AddSourceRequest(BaseModel):
 
 @app.post("/api/add_intel_source")
 async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth)):
-    """Add a new link (Telegram/Web) to the global background scanner."""
+    """Add a new link (Telegram/Web) to the global background scanner, and immediately scrape it."""
     url = request.url.strip()
     if not url:
         return {"error": "Empty URL"}
@@ -292,9 +292,102 @@ async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth
     
     try:
         db.save_custom_source(url, source_type, added_by=_user.get('email', 'User'))
-        return {"status": "success", "message": f"{source_type.title()} source added to intelligence loop."}
     except Exception as e:
         return {"error": str(e)}
+    
+    # Immediately scrape and analyze the website (don't wait 60 min for background agent)
+    scraped_items = []
+    if source_type == "website":
+        try:
+            from core_scrapers import WebScraper
+            content = await WebScraper.scrape_content(url)
+            if content and len(content.strip()) > 50:
+                from llm_analyzer import MistralAnalyzer
+                analyzer = MistralAnalyzer()
+                
+                # Ask Mistral to extract intelligence + geo location from the scraped content
+                system_prompt = (
+                    f"Today is {datetime.now().strftime('%A, %B %d, %Y')}. "
+                    "You are an intelligence analyst at Artillegence Intelligence. "
+                    "Extract the TOP 3 most important news/events from this scraped website content. "
+                    "For EACH event return: headline, summary (2-3 sentences), lat, lng, city, country, severity (low/medium/high/critical). "
+                    "Respond ONLY in valid JSON: {\"events\": [{\"headline\": ..., \"summary\": ..., \"lat\": ..., \"lng\": ..., \"city\": ..., \"country\": ..., \"severity\": ...}, ...]}"
+                )
+                user_msg = f"SOURCE URL: {url}\n\nSCRAPED CONTENT:\n{content[:6000]}"
+                
+                headers = {
+                    'Authorization': f'Bearer {os.getenv("MISTRAL_API_KEY", "")}',
+                    'Content-Type': 'application/json'
+                }
+                payload = {
+                    'model': 'mistral-large-latest',
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_msg}
+                    ],
+                    'temperature': 0.1,
+                    'response_format': {"type": "json_object"}
+                }
+                
+                import aiohttp as _aiohttp
+                async with _aiohttp.ClientSession() as session:
+                    async with session.post(
+                        'https://api.mistral.ai/v1/chat/completions',
+                        headers=headers, json=payload, timeout=60
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            result_text = data['choices'][0]['message']['content']
+                            parsed = json.loads(result_text)
+                            events_list = parsed.get("events", [])
+                            
+                            geo_events_to_save = []
+                            for i, ev in enumerate(events_list[:5]):
+                                eid = f"websrc-{uuid.uuid4().hex[:8]}"
+                                geo_ev = {
+                                    "id": eid,
+                                    "lat": ev.get("lat", 0),
+                                    "lng": ev.get("lng", 0),
+                                    "city": ev.get("city", ""),
+                                    "country": ev.get("country", ""),
+                                    "headline": ev.get("headline", f"Update from {url}"),
+                                    "summary": ev.get("summary", ""),
+                                    "source": f"Web: {url}",
+                                    "url": url,
+                                    "severity": ev.get("severity", "medium"),
+                                    "timestamp": datetime.now().isoformat(),
+                                    "section": "web_monitoring"
+                                }
+                                geo_events_to_save.append(geo_ev)
+                                scraped_items.append(geo_ev)
+                            
+                            # Save to geo_events for map plotting
+                            if geo_events_to_save:
+                                db.save_geo_events(geo_events_to_save)
+                                _geo_cache.clear()
+                                _geo_cache.extend(db.get_geo_events(limit=200))
+                                await manager.broadcast({"type": "geo_events_update", "events": _geo_cache})
+                            
+                            # Also broadcast each as intel feed item
+                            for item in scraped_items:
+                                feed_event = {
+                                    "agent": "website_scanner",
+                                    "title": item["headline"],
+                                    "summary": item["summary"],
+                                    "timestamp": item["timestamp"],
+                                    "url": url
+                                }
+                                await manager.broadcast(feed_event)
+                                
+                db.mark_source_scanned(url)
+        except Exception as e:
+            print(f"[ADD_SOURCE] Immediate scrape error: {e}")
+    
+    return {
+        "status": "success", 
+        "message": f"{source_type.title()} source added. {'Found ' + str(len(scraped_items)) + ' events.' if scraped_items else 'Background monitoring started.'}",
+        "items_found": len(scraped_items)
+    }
 
 class StockAnalysisRequest(BaseModel):
     symbol: str
