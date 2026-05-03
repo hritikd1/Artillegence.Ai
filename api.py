@@ -13,6 +13,7 @@ import os
 # Internal modules
 from auth import require_auth
 import database as db
+from forecaster import StockForecaster
 
 app = FastAPI(title="Artillegence AI API")
 
@@ -410,6 +411,7 @@ async def get_status():
 async def get_candle_data(symbol: str, period: str = "1mo", interval: str = "1d"):
     """Fetch candle data from Yahoo Finance for custom Plotly rendering."""
     try:
+        import yfinance as yf
         raw_ticker = symbol.split(":")[-1] if ":" in symbol else symbol
         ticker = raw_ticker
         

@@ -7,6 +7,8 @@ langchain-community
 feedparser
 beautifulsoup4
 yfinance
+scikit-learn
+numpy
 bytez
 playwright
 Pillow
