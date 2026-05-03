@@ -234,7 +234,7 @@ function App() {
   const [geoEvents, setGeoEvents] = useState<GeoEvent[]>([]);
   const [telegramData, setTelegramData] = useState<LiveEvent | null>(null);
   const [trendsData, setTrendsData] = useState<any>(null);
-  const [signalData, setSignalData] = useState<any>(null);
+
   const [chainResult, setChainResult] = useState<any>(null);
   const [chainInput, setChainInput] = useState('');
   const [chainLoading, setChainLoading] = useState(false);
@@ -362,17 +362,7 @@ function App() {
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
   }, [authChecked]);
 
-  // Fetch Signal scorecard
-  useEffect(() => {
-    if (!authChecked) return;
-    const poll = async () => {
-      try {
-        const data = await apiGet<any>('/api/signals');
-        if (!data.error) setSignalData(data);
-      } catch { /* */ }
-    };
-    poll(); const id = setInterval(poll, 30000); return () => clearInterval(id);
-  }, [authChecked]);
+
 
   // Global hook for Tactical Advisor
   useEffect(() => {
@@ -1138,75 +1128,6 @@ function GoogleTrendsWidget({ data }: { data: any }) {
 /* ═══════════════════════════════════════ */
 /* ADVANCED: Signal Accuracy Scorecard     */
 /* ═══════════════════════════════════════ */
-
-function SignalScorecard({ data }: { data: any }) {
-  const accuracy = data?.accuracy_pct || 0;
-  const total = data?.total_signals || 0;
-  const verified = data?.verified_signals || 0;
-  const correct = data?.correct_signals || 0;
-  const pending = data?.pending_verification || 0;
-  const recentSignals = data?.recent_signals || [];
-
-  const accuracyColor = accuracy >= 65 ? 'text-emerald-400' : accuracy >= 50 ? 'text-amber-400' : accuracy > 0 ? 'text-red-400' : 'text-slate-500';
-  const accuracyBg = accuracy >= 65 ? 'bg-emerald-500' : accuracy >= 50 ? 'bg-amber-500' : accuracy > 0 ? 'bg-red-500' : 'bg-slate-600';
-
-  return (
-    <div className="glass-panel p-5 flex flex-col" style={{ maxHeight: '480px' }}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <Target className="text-violet-400" size={16} /> SIGNAL TRACKER
-        </h2>
-        <span className="text-[10px] text-slate-500">{total} signals logged</span>
-      </div>
-
-      {/* Accuracy Gauge */}
-      <div className="bg-slate-900/60 rounded-lg p-4 border border-slate-800 mb-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[9px] font-bold text-slate-500 tracking-widest">ARTILLEGENCE ACCURACY</span>
-          <span className={`text-2xl font-black ${accuracyColor}`}>{verified > 0 ? `${accuracy}%` : '—'}</span>
-        </div>
-        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div className={`h-full ${accuracyBg} rounded-full transition-all duration-1000`} style={{ width: `${accuracy}%` }}></div>
-        </div>
-        <div className="flex justify-between mt-2 text-[9px] text-slate-500">
-          <span>✅ {correct} correct</span>
-          <span>❌ {verified - correct} wrong</span>
-          <span>⏳ {pending} pending</span>
-        </div>
-      </div>
-
-      {/* Recent Signals */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin">
-        <span className="text-[9px] font-bold text-slate-500 tracking-widest">RECENT SIGNALS</span>
-        {recentSignals.length > 0 ? recentSignals.map((sig: any, i: number) => (
-          <div key={i} className="flex items-center gap-2 p-2 rounded bg-slate-900/40 border border-slate-800/50">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-              sig.direction === 'BULLISH' ? 'bg-emerald-400' : sig.direction === 'BEARISH' ? 'bg-red-400' : 'bg-slate-400'
-            }`}></div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-white font-medium truncate">{sig.target}</span>
-                <span className={`text-[9px] font-bold ${
-                  sig.correct === true ? 'text-emerald-400' : sig.correct === false ? 'text-red-400' : 'text-slate-500'
-                }`}>
-                  {sig.correct === true ? '✅' : sig.correct === false ? '❌' : '⏳'}
-                </span>
-              </div>
-              <span className={`text-[9px] ${
-                sig.direction === 'BULLISH' ? 'text-emerald-500' : sig.direction === 'BEARISH' ? 'text-red-500' : 'text-slate-500'
-              }`}>{sig.direction} · {sig.confidence}</span>
-            </div>
-          </div>
-        )) : (
-          <div className="text-center py-4 text-slate-500">
-            <Target className="mx-auto mb-2 opacity-40" size={20} />
-            <p className="text-[10px]">Signals will appear as agents generate predictions</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════ */
 /* ADVANCED: Event Chain Predictor         */

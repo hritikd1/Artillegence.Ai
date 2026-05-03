@@ -4,7 +4,7 @@ import {
     Minus, AlertTriangle, Newspaper, RefreshCw, ChevronDown, ChevronUp,
     Eye, ClipboardPaste
 } from 'lucide-react';
-import { apiPost } from './api';
+import { apiPost, apiGet } from './api';
 // Static imports removed for production stability
 
 /* ─── Robust Plotly Loader ─── */
