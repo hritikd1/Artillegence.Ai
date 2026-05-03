@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 import asyncio
+import database as db
 from datetime import datetime
 import time
 import json
