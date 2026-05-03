@@ -356,7 +356,8 @@ async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth
                                     "url": url,
                                     "severity": ev.get("severity", "medium"),
                                     "timestamp": datetime.now().isoformat(),
-                                    "section": "web_monitoring"
+                                    "section": "web_monitoring",
+                                    "category": "⭐ User Custom"
                                 }
                                 geo_events_to_save.append(geo_ev)
                                 scraped_items.append(geo_ev)

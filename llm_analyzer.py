@@ -334,7 +334,7 @@ Provide a complete trading thesis for this stock."""
         4. DIRECT INTENT MATCHING: If the user's topic implies a specific question or data extraction (e.g. "gold prices", "AC prices"), your VERY FIRST sentence MUST directly state the factual answer using the Web Snippets. If the exact numbers/prices are not in the provided data, explicitly state "Current exact prices are not available in the scraped data, but..." and then summarize the articles.
         
         Respond ONLY in valid JSON format matching this exact structure:
-        {
+        {{
           "headline": "The best news title OR 'Monitoring: [Topic]'",
           "thesis": "Your intelligence brief here...",
           "lat": 19.9975,
@@ -342,7 +342,7 @@ Provide a complete trading thesis for this stock."""
           "city": "Nashik",
           "country": "India",
           "is_relevant": true
-        }"""
+        }}"""
 
         user_message = f"USER'S CUSTOM TOPIC: {query}\n\nLATEST WEB SEARCH SNIPPETS (For Prices/Facts):\n{web_block}\n\nLATEST LIVE HEADLINES:\n{news_block}\n\nProduce the intelligence briefing in JSON format."
 

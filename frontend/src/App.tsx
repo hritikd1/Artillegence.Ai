@@ -50,6 +50,9 @@ interface LiveEvent {
   source_count?: number;
   news_count?: number;
   timestamp: string;
+  url?: string;
+  headline?: string;
+  source_link?: string;
 }
 
 interface AgentInfo {
@@ -437,7 +440,22 @@ function App() {
   const latestTrending = [...events].reverse().find(e => e.agent === 'trending_tracker');
   const latestIndianMarket = [...events].reverse().find(e => e.agent === 'indian_market_tracker');
   const latestOpportunity = [...events].reverse().find(e => e.agent === 'opportunity_finder');
-  const latestTelegram = [...events].reverse().find(e => e.agent === 'telegram_scanner');
+  const latestTelegram = [...events].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
+  const websiteEvents = events.filter(e => e.agent === 'website_scanner').map(e => ({
+    agent: 'website_scanner',
+    headline: e.title || e.headline,
+    summary: e.summary,
+    timestamp: e.timestamp,
+    url: e.url || e.source_link
+  }));
+
+  const combinedTelegramData = {
+    news_items: [
+      ...websiteEvents,
+      ...(latestTelegram?.news_items || [])
+    ].sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+  };
+
   const marketAnalyzerEvents = events.filter(e => e.agent === 'market_analyzer');
 
   const AGENT_KEYS = ['news_scanner', 'market_analyzer', 'opportunity_finder', 'trending_tracker', 'indian_market_tracker', 'google_trends_tracker'] as const;
@@ -503,7 +521,7 @@ function App() {
             </Suspense>
           </div>
           <div className="lg:col-span-1">
-            <TelegramFeed data={latestTelegram || telegramData} />
+            <TelegramFeed data={combinedTelegramData} />
           </div>
         </div>
 
