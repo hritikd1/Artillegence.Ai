@@ -3,6 +3,7 @@ import numpy as np
 import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime, timedelta
+from angel_one import AngelOneClient
 
 class StockForecaster:
     def __init__(self, symbol):
@@ -23,7 +24,7 @@ class StockForecaster:
                 self.symbol = symbol
 
     def fetch_market_data(self, period="2y"):
-        """Fetch historical data from Yahoo Finance."""
+        """Fetch historical data from Yahoo Finance and merge live Angel One data."""
         ticker = yf.Ticker(self.symbol)
         df = ticker.history(period=period)
         if df.empty:
@@ -40,6 +41,53 @@ class StockForecaster:
             'Volume': 'volume'
         })
         df = df.dropna(subset=['close'])
+
+        # Angel One Live Data Merge
+        try:
+            client = AngelOneClient()
+            if client.is_configured():
+                if self.symbol.endswith('.NS'):
+                    search_sym = "NSE:" + self.symbol.replace('.NS', '')
+                elif self.symbol.endswith('.BO'):
+                    search_sym = "BSE:" + self.symbol.replace('.BO', '')
+                else:
+                    search_sym = self.symbol
+                
+                live_data = client.fetch_live_quote(search_sym)
+                if live_data:
+                    # Convert to our df format
+                    # Make date timezone naive if df['date'] is naive, or tz-aware if df['date'] is tz-aware
+                    # YF dates are usually tz-aware, we'll try to match it or just use pd.to_datetime
+                    
+                    new_date = pd.to_datetime(datetime.now().strftime('%Y-%m-%d'))
+                    if pd.api.types.is_datetime64tz_dtype(df['date']):
+                        new_date = new_date.tz_localize(df['date'].dt.tz)
+                        
+                    new_row = pd.DataFrame([{
+                        'date': new_date,
+                        'open': float(live_data.get('open', 0)),
+                        'high': float(live_data.get('high', 0)),
+                        'low': float(live_data.get('low', 0)),
+                        'close': float(live_data.get('close', 0) or live_data.get('ltp', 0)),
+                        'volume': float(live_data.get('tradeVolume', 0))
+                    }])
+                    
+                    last_date = pd.to_datetime(df['date'].iloc[-1]).strftime('%Y-%m-%d')
+                    today_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    if last_date == today_date:
+                        df.iloc[-1, df.columns.get_loc('open')] = new_row['open'][0]
+                        df.iloc[-1, df.columns.get_loc('high')] = new_row['high'][0]
+                        df.iloc[-1, df.columns.get_loc('low')] = new_row['low'][0]
+                        df.iloc[-1, df.columns.get_loc('close')] = new_row['close'][0]
+                        df.iloc[-1, df.columns.get_loc('volume')] = new_row['volume'][0]
+                    else:
+                        df = pd.concat([df, new_row], ignore_index=True)
+                        
+                    print(f"Angel One: Merged live quote for {search_sym} -> LTP {live_data.get('ltp')}")
+        except Exception as e:
+            print(f"Angel One merge failed (using YFinance only): {e}")
+
         return df
 
     def generate_forecast(self, reference_window_size=50, forecast_length=30):
