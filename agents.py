@@ -533,7 +533,7 @@ async def opportunity_finder_cycle():
             ("IPO", "upcoming IPO India 2026 rating"),
         ]
 
-        articles = await fetch_rss(topics, limit=5, hours=6)
+        articles = await fetch_google_news(topics, limit=8, hours=24)
         unique = deduplicate(articles)[:15]
 
         headlines = "\n".join([f"- {a['title']}" for a in unique])
@@ -545,7 +545,7 @@ async def opportunity_finder_cycle():
         market_analysis_data = db.get_intelligence("market_analyzer_full") or {}
         market_ctx = str(market_analysis_data.get("market_overview", {}).get("analysis", "Stable market conditions."))
 
-        prompt = f"""Based on these news headlines and market context, identify TOP 5 INVESTMENT OPPORTUNITIES.
+        prompt = f"""Based on these news headlines and market context, identify TOP 5 INVESTMENT OPPORTUNITIES from reputable sources.
 {memory_ctx}
 News:
 {headlines}
@@ -556,13 +556,13 @@ Market Context:
 For each opportunity:
 1. Stock/Company Name (specific like "HDFC Bank", "Tata Motors")
 2. Action: BUY / ACCUMULATE / WATCH
-3. Reasoning citing the headline
+3. Reasoning citing the specific headline from a reputable source
 4. Risk Level: Low / Medium / High
 5. Time Horizon
 
 Also name ONE stock to AVOID.
 
-IMPORTANT: Only cite information from these headlines. Write in plain text only."""
+IMPORTANT: Only cite information from these headlines. Do NOT use your generic knowledge base. Write in plain text only."""
 
         analysis = await call_mistral(prompt)
         db.append_agent_memory("opportunity_finder", analysis[:600])
@@ -620,8 +620,8 @@ async def trending_tracker_cycle():
         ("Sensex", "Sensex today"),
     ]
 
-    bing_articles = await fetch_rss(topics, limit=6, hours=6)
-    gn_articles = await fetch_google_news(topics[:4], limit=6, hours=6)
+    bing_articles = await fetch_rss(topics, limit=6, hours=24)
+    gn_articles = await fetch_google_news(topics[:4], limit=6, hours=24)
     articles = bing_articles + gn_articles
     unique = deduplicate(articles)[:15]
 
@@ -633,7 +633,7 @@ async def trending_tracker_cycle():
             ("Stocks", "stocks India"),
             ("Business", "business news India"),
         ]
-        articles = await fetch_rss(fallback_topics, limit=8, hours=8)  # fallback: slightly wider window
+        articles = await fetch_rss(fallback_topics, limit=8, hours=48)  # fallback: slightly wider window
         unique = deduplicate(articles)[:15]
 
     if not unique:
@@ -705,9 +705,9 @@ async def indian_market_tracker_cycle():
         ("Rupee", "Indian rupee dollar"),
     ]
 
-    bing_articles = await fetch_rss(topics, limit=5, hours=4)
-    gn_articles = await fetch_google_news(topics, limit=5, hours=4)
-    gn_india = await fetch_google_news_topics(["india", "business"], limit=6, hours=4)
+    bing_articles = await fetch_rss(topics, limit=5, hours=24)
+    gn_articles = await fetch_google_news(topics, limit=5, hours=24)
+    gn_india = await fetch_google_news_topics(["india", "business"], limit=6, hours=24)
     articles = bing_articles + gn_articles + gn_india
     unique = deduplicate(articles)[:20]
 

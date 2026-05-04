@@ -39,6 +39,7 @@ class StockForecaster:
             'Close': 'close', 
             'Volume': 'volume'
         })
+        df = df.dropna(subset=['close'])
         return df
 
     def generate_forecast(self, reference_window_size=50, forecast_length=30):
