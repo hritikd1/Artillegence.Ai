@@ -18,3 +18,4 @@ pytrends
 PyJWT
 bcrypt
 python-multipart
+pyotp
