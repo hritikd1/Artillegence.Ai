@@ -168,12 +168,25 @@ def extract_geo_events(event: dict):
                             if 'india' in text_for_cat or 'nifty' in text_for_cat or 'sensex' in text_for_cat: 
                                 cat = 'Indian Stock News'
 
+                        headline = matching_item.get('title', 'Telegram Intel Update')
+                        if headline.startswith("Intel Update from") or headline == "Telegram Intel Update":
+                            snippet = matching_item.get('snippet', '')
+                            if snippet:
+                                first_line = snippet.split('\n')[0].strip()
+                                first_line = re.sub(r'\s+', ' ', first_line)
+                                if len(first_line) > 80:
+                                    truncated = first_line[:80]
+                                    last_space = truncated.rfind(' ')
+                                    headline = (truncated[:last_space] if last_space > 40 else truncated) + "..."
+                                else:
+                                    headline = first_line
+
                         found.append({
                             'id': stable_id,
                             'lat': lat, 'lng': lng,
                             'city': str(loc.get('name', 'Unknown')).title(),
                             'country': '',
-                            'headline': matching_item.get('title', 'Telegram Intel Update'),
+                            'headline': headline,
                             'summary': matching_item.get('snippet', ''),
                             'telegram_post_id': post_id,
                             'source': clean_slug,
@@ -181,7 +194,6 @@ def extract_geo_events(event: dict):
                             'severity': severity,
                             'category': cat,
                             'timestamp': matching_item.get('timestamp') or datetime.now().isoformat()
-
                         })
                     except (ValueError, TypeError): continue
         return found
@@ -618,6 +630,14 @@ async def get_google_trends(_user=Depends(require_auth)):
     if data:
         return data
     return {"status": "no trends data yet  agent is starting up"}
+
+@app.get("/api/scenarios")
+async def get_scenarios(_user=Depends(require_auth)):
+    """Return the latest auto-generated investment scenarios from the Scenario Intelligence Agent."""
+    data = db.get_intelligence("scenario_intelligence")
+    if data:
+        return data
+    return {"status": "Scenario Intelligence agent is generating its first analysis..."}
 
 @app.post("/api/predict_chain")
 async def predict_chain(request: AnalyzeRequest, _user=Depends(require_auth)):

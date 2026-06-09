@@ -1074,7 +1074,234 @@ Write in clean plain text, no markdown."""
 
 
 # 
-# FEATURE: Event Chain Prediction Engine
+# AGENT 12: Scenario Intelligence Engine (every 15 min)
+# Autonomous multi-scenario generator that synthesizes all agent intelligence
+# into actionable IF→THEN investment scenarios.
+# 
+
+async def scenario_intelligence_cycle():
+    """Autonomous Scenario Intelligence Agent.
+    Gathers context from ALL other agents, generates multiple IF→THEN
+    investment scenarios, and keeps updating them as conditions change."""
+    print("\n[SCENARIO INTELLIGENCE] Generating market scenarios...")
+    try:
+        # 1. Gather context from all other agents in the DB
+        market_data = db.get_intelligence("market_analyzer_full") or {}
+        news_data = db.get_intelligence("news_scanner") or {}
+        trending_data = db.get_intelligence("trending_tracker") or {}
+        indian_data = db.get_intelligence("indian_market_tracker") or {}
+        telegram_data = db.get_intelligence("telegram_scanner") or {}
+        trends_data = db.get_intelligence("google_trends_tracker") or {}
+        opportunity_data = db.get_intelligence("opportunity_finder") or {}
+
+        # Build a compact context block from each agent
+        context_parts = []
+
+        # Market overview
+        overview = market_data.get("market_overview", {})
+        if overview.get("analysis"):
+            context_parts.append(f"MARKET OVERVIEW:\n{str(overview['analysis'])[:600]}")
+
+        # Global impact
+        global_impact = market_data.get("global_impact", {})
+        if global_impact.get("analysis"):
+            context_parts.append(f"GLOBAL IMPACT:\n{str(global_impact['analysis'])[:500]}")
+
+        # Sectoral analysis
+        sectoral = market_data.get("sectoral_analysis", {})
+        if sectoral.get("analysis"):
+            context_parts.append(f"SECTOR SCORES:\n{str(sectoral['analysis'])[:500]}")
+
+        # FII/DII
+        fii_dii = market_data.get("fii_dii_data", {})
+        if fii_dii.get("analysis"):
+            context_parts.append(f"FII/DII FLOWS:\n{str(fii_dii['analysis'])[:300]}")
+
+        # Raw materials / commodities
+        raw_mat = market_data.get("raw_materials", {})
+        if raw_mat.get("analysis"):
+            context_parts.append(f"COMMODITIES:\n{str(raw_mat['analysis'])[:400]}")
+
+        # Latest news summary
+        if news_data.get("summary"):
+            context_parts.append(f"LATEST NEWS:\n{str(news_data['summary'])[:600]}")
+
+        # Indian market
+        if indian_data.get("summary"):
+            context_parts.append(f"INDIAN MARKET:\n{str(indian_data['summary'])[:500]}")
+
+        # Trending
+        if trending_data.get("summary"):
+            context_parts.append(f"TRENDING:\n{str(trending_data['summary'])[:400]}")
+
+        # Telegram intel
+        tg_items = telegram_data.get("news_items", [])
+        if tg_items:
+            tg_headlines = "\n".join([f"- {item.get('title', '')} | {item.get('snippet', '')[:80]}" for item in tg_items[:8]])
+            context_parts.append(f"TELEGRAM INTEL:\n{tg_headlines}")
+
+        # Google Trends spikes
+        spike_items = [t for t in trends_data.get("trend_items", []) if t.get("is_spiking")]
+        if spike_items:
+            spikes_text = ", ".join([f"{s['keyword']} ({s['spike_ratio']}x)" for s in spike_items[:5]])
+            context_parts.append(f"SEARCH SPIKES: {spikes_text}")
+        trending_searches = trends_data.get("trending_searches", [])
+        if trending_searches:
+            ts_text = ", ".join([t["term"] for t in trending_searches[:8]])
+            context_parts.append(f"TRENDING SEARCHES IN INDIA: {ts_text}")
+
+        # Opportunities
+        if opportunity_data.get("summary"):
+            context_parts.append(f"OPPORTUNITIES:\n{str(opportunity_data['summary'])[:400]}")
+
+        # Agent memory for continuity
+        memory_ctx = db.build_memory_context("scenario_intelligence")
+
+        combined_context = "\n\n".join(context_parts)
+
+        if not combined_context or len(combined_context.strip()) < 100:
+            print("   [SCENARIO INTELLIGENCE] Not enough intelligence data yet. Skipping.")
+            return
+
+        # 2. Call Mistral with the mega-context to generate scenarios
+        system_msg = (
+            f"Today is {datetime.now().strftime('%A, %B %d, %Y')}. "
+            "You are an elite scenario planning strategist at Artillegence Intelligence. "
+            "You have deep expertise in Indian and global markets, commodities, geopolitics, demand-supply dynamics, and behavioral finance. "
+            "Your job is to generate MULTIPLE distinct market scenarios based on the CURRENT live intelligence feed provided below. "
+            "Each scenario must be a realistic IF→THEN chain showing what could happen and what investment action to take. "
+            "You MUST return ONLY valid JSON with no markdown fences, no extra text."
+        )
+
+        prompt = f"""{memory_ctx}
+=== LIVE INTELLIGENCE FEED (from 11 autonomous agents) ===
+{combined_context}
+=== END FEED ===
+
+Based on ALL the intelligence above, generate 3 to 5 distinct investment scenarios.
+
+Each scenario explores a DIFFERENT possible outcome of the current market situation.
+Scenarios should range from optimistic (bullish) to pessimistic (bearish) to cover all possibilities.
+
+For EACH scenario, you MUST provide:
+- A catchy title summarizing the trigger
+- The trigger condition (what event or shift would cause this)
+- Probability estimate (LOW/MEDIUM/HIGH and a percentage 10-90)
+- Severity (CRITICAL/HIGH/MEDIUM/LOW)
+- Overall sentiment for this scenario (BULLISH/BEARISH/NEUTRAL)
+- A chain of 3-5 cascading impacts (each with: step number, what happens, what's affected, direction UP/DOWN/VOLATILE, magnitude, timeframe)
+- Specific investment opportunity (action BUY/SELL/HEDGE, specific Indian stock names with NSE tickers, reasoning)
+- A hedge suggestion for risk protection
+
+Return this EXACT JSON structure:
+{{
+    "scenarios": [
+        {{
+            "id": "sc-1",
+            "title": "<catchy scenario title>",
+            "trigger": "<what triggers this scenario>",
+            "probability": "HIGH" | "MEDIUM" | "LOW",
+            "probability_pct": 45,
+            "severity": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+            "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
+            "chain": [
+                {{
+                    "step": 1,
+                    "impact": "<what happens>",
+                    "affected": "<commodity/sector/index>",
+                    "direction": "UP" | "DOWN" | "VOLATILE",
+                    "magnitude": "<estimated % or qualitative>",
+                    "timeframe": "<immediate/1-3 days/1-2 weeks/1 month>"
+                }}
+            ],
+            "opportunity": {{
+                "action": "BUY" | "SELL" | "HEDGE" | "WATCH",
+                "stocks": ["<Stock Name (NSE: TICKER)>"],
+                "reasoning": "<why this is an opportunity>",
+                "risk": "LOW" | "MEDIUM" | "HIGH"
+            }},
+            "hedge": "<1-2 sentence hedge suggestion>"
+        }}
+    ],
+    "market_sentiment": "<overall current market mood>",
+    "global_sentiment": "<risk-on/risk-off/mixed>",
+    "key_watchlist": ["<3-5 most important things to watch right now>"]
+}}
+
+CRITICAL: Scenarios must be based ONLY on the intelligence feed above. Cite specific headlines and data points. Do NOT hallucinate events."""
+
+        headers = {
+            'Authorization': f'Bearer {MISTRAL_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        payload = {
+            'model': 'mistral-large-latest',
+            'messages': [
+                {'role': 'system', 'content': system_msg},
+                {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.3,
+            'max_tokens': 8192,
+            'response_format': {"type": "json_object"}
+        }
+
+        scenario_data = None
+        async with aiohttp.ClientSession() as session:
+            async with session.post(MISTRAL_API_URL, headers=headers, json=payload, timeout=90) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    raw_text = data['choices'][0]['message']['content']
+                    try:
+                        scenario_data = json.loads(raw_text)
+                    except json.JSONDecodeError:
+                        # Try to clean markdown fences
+                        clean = raw_text.strip()
+                        if clean.startswith('```'):
+                            clean = clean.split('\n', 1)[1] if '\n' in clean else clean[3:]
+                            clean = clean.rsplit('```', 1)[0]
+                        scenario_data = json.loads(clean)
+                elif resp.status == 429:
+                    print("   [SCENARIO INTELLIGENCE] Rate limited. Will retry next cycle.")
+                    return
+                else:
+                    error = await resp.text()
+                    print(f"   [SCENARIO INTELLIGENCE] API error ({resp.status}): {error[:200]}")
+                    return
+
+        if not scenario_data:
+            print("   [SCENARIO INTELLIGENCE] No data returned from Mistral.")
+            return
+
+        # Add metadata
+        scenario_data['generated_at'] = datetime.now().isoformat()
+        scenario_data['agent'] = 'scenario_intelligence'
+        scenario_data['title'] = 'Scenario Intelligence Update'
+
+        # Add timestamps to each scenario
+        for sc in scenario_data.get('scenarios', []):
+            sc['updated_at'] = datetime.now().isoformat()
+
+        # 3. Save to DB and broadcast
+        db.save_intelligence("scenario_intelligence", scenario_data)
+        db.append_agent_memory("scenario_intelligence", 
+            f"Generated {len(scenario_data.get('scenarios', []))} scenarios. "
+            f"Market: {scenario_data.get('market_sentiment', 'N/A')}. "
+            f"Global: {scenario_data.get('global_sentiment', 'N/A')}.")
+
+        await broadcast(scenario_data)
+
+        print(f"   [SCENARIO INTELLIGENCE] Generated {len(scenario_data.get('scenarios', []))} scenarios, saved to DB")
+
+    except json.JSONDecodeError as e:
+        print(f"   [SCENARIO INTELLIGENCE] JSON parse error: {e}")
+    except Exception as e:
+        print(f"   [SCENARIO INTELLIGENCE] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# 
+# FEATURE: Event Chain Prediction Engine (manual, on-demand)
 # 
 
 async def predict_event_chain(event_text: str) -> dict:
@@ -1192,6 +1419,7 @@ agent_status = {
     "google_trends_tracker":  {"status": "idle", "last_run": None, "cycle_count": 0},
     "custom_monitor":         {"status": "idle", "last_run": None, "cycle_count": 0},
     "website_scanner":        {"status": "idle", "last_run": None, "cycle_count": 0},
+    "scenario_intelligence":  {"status": "idle", "last_run": None, "cycle_count": 0},
 }
 
 def get_agent_status():
@@ -1220,14 +1448,15 @@ async def start_all_agents():
     # Slightly offset the runtimes so we don't hit mistral/telegram rate limits at exactly the same time
     await asyncio.gather(
         run_agent_loop("news_scanner",            news_scanner_cycle,            interval_min=5),
-        run_agent_loop("market_analyzer",         market_analyzer_cycle,         interval_min=30),
+        # run_agent_loop("market_analyzer",         market_analyzer_cycle,         interval_min=30),
         run_agent_loop("opportunity_finder",      opportunity_finder_cycle,      interval_min=30),
-        run_agent_loop("trending_tracker",        trending_tracker_cycle,        interval_min=15),
+        # run_agent_loop("trending_tracker",        trending_tracker_cycle,        interval_min=15),
         run_agent_loop("indian_market_tracker",   indian_market_tracker_cycle,   interval_min=10),
         run_agent_loop("telegram_scanner",        telegram_scanner_cycle,        interval_min=5),
         run_agent_loop("visual_researcher",       visual_research_cycle,         interval_min=20),
         run_agent_loop("google_news_scanner",     google_news_scanner_cycle,     interval_min=10),
-        run_agent_loop("google_trends_tracker",   google_trends_tracker_cycle,   interval_min=20),
+        # run_agent_loop("google_trends_tracker",   google_trends_tracker_cycle,   interval_min=20),
         run_agent_loop("custom_monitor",          custom_intelligence_monitor_cycle, interval_min=60),
         run_agent_loop("website_scanner",         website_scanner_cycle,         interval_min=60),
+        run_agent_loop("scenario_intelligence",   scenario_intelligence_cycle,   interval_min=15),
     )

@@ -471,8 +471,22 @@ class TelegramChannelScraper(NewsSource):
                         if img_match:
                             image_url = img_match.group(1)
 
+                    # Generate a clean descriptive title from the first line / sentence
+                    title_text = text.split('\n')[0].strip()
+                    if not title_text:
+                        title_text = text.strip()
+                    # Clean up multiple spaces, emojis, etc.
+                    title_text = re.sub(r'\s+', ' ', title_text)
+                    if len(title_text) > 80:
+                        truncated = title_text[:80]
+                        last_space = truncated.rfind(' ')
+                        title_text = (truncated[:last_space] if last_space > 40 else truncated) + "..."
+                    
+                    if len(title_text) < 5:
+                        title_text = f"Intel Update from {self.channel_slug}"
+
                     page_results.append({
-                        'title': f"Intel Update from {self.channel_slug}",
+                        'title': title_text,
                         'snippet': text,
                         'link': f"https://t.me/{self.channel_slug}/{post_id}" if post_id else base_url,
                         'source': f"Telegram: {self.channel_slug}",

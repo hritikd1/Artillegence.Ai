@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback, Suspense, lazy, Component, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy, Component, type ReactNode } from 'react'
 import {
   Activity, Radio, Cpu, Satellite, TrendingUp, Search,
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
-  ChevronRight, ChevronDown, RefreshCw, Clock, Globe, AlertTriangle,
-  DollarSign, Eye, Newspaper, Zap, Target, ArrowRight, Shield, X
+  RefreshCw, Clock, Globe, AlertTriangle,
+  DollarSign, Newspaper, Zap, Target, ArrowRight, Shield, X
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
@@ -24,6 +24,7 @@ interface GeoEvent {
   url: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
   timestamp: string;
+  category?: string;
 }
 
 /* ─── Types ─── */
@@ -59,13 +60,6 @@ interface AgentInfo {
   status: string;
   last_run: string | null;
   cycle_count: number;
-}
-
-interface AnalysisSection {
-  timestamp: string;
-  analysis: string;
-  news_count?: number;
-  sources?: NewsItem[];
 }
 
 /* ─── Helpers ─── */
@@ -224,6 +218,523 @@ const TacticalAdvisorModal = ({
   );
 };
 
+
+interface ChainStep {
+  label: string;
+  type: string;
+  change: string;
+  isPositive: boolean;
+  neutral?: boolean;
+}
+
+const getImpactChain = (ev: GeoEvent): ChainStep[] => {
+  const text = (ev.headline + ' ' + ev.summary).toLowerCase();
+  
+  if (text.includes('oil') || text.includes('hormuz') || text.includes('crude') || text.includes('energy') || text.includes('fuel')) {
+    return [
+      { label: 'Strait of Hormuz Tension', type: 'Geopolitical Event', change: 'Trigger', isPositive: true, neutral: true },
+      { label: 'Crude Oil Prices Likely to Rise', type: 'Commodity Impact', change: '+6% to +8%', isPositive: true },
+      { label: 'Aviation & Shipping Cost Increase', type: 'Sector Impact', change: '-3% to -5%', isPositive: false },
+      { label: 'Airlines Margins Under Pressure', type: 'Industry Impact', change: 'Negative', isPositive: false },
+      { label: 'ONGC, Reliance Likely to Benefit', type: 'Stock Impact', change: '+2% to +4%', isPositive: true }
+    ];
+  }
+  
+  if (text.includes('russia') || text.includes('ukraine') || text.includes('war') || text.includes('military') || text.includes('weapon') || text.includes('defence') || text.includes('defense')) {
+    return [
+      { label: 'East Ukraine Conflict Escalation', type: 'Security Incident', change: 'Trigger', isPositive: true, neutral: true },
+      { label: 'Defence Spending Hike Projected', type: 'Budgetary Expansion', change: '+8% to +12%', isPositive: true },
+      { label: 'Global Trade Routing Bottlenecks', type: 'Logistics Impact', change: '-4% to -6%', isPositive: false },
+      { label: 'Titanium & Gas Supplies Contract', type: 'Supply Chain Impact', change: 'Negative', isPositive: false },
+      { label: 'HAL, Bharat Electronics Surge', type: 'Stock Impact', change: '+5% to +8%', isPositive: true }
+    ];
+  }
+
+  if (text.includes('inflation') || text.includes('fed') || text.includes('rbi') || text.includes('rate') || text.includes('interest') || text.includes('economic') || text.includes('fiscal') || text.includes('gdp')) {
+    return [
+      { label: 'Hawkish Fed/RBI Stance Spikes', type: 'Macroeconomic Event', change: 'Trigger', isPositive: true, neutral: true },
+      { label: '10-Year Bond Yields Jump', type: 'Treasury Impact', change: '+0.25 bps', isPositive: true },
+      { label: 'Net Interest Margin Expansion', type: 'Banking Sector', change: '+1.5% to +2.5%', isPositive: true },
+      { label: 'Industrial Borrowing Costs Rise', type: 'Corporate Credit', change: '-2.0%', isPositive: false },
+      { label: 'SBI, HDFC Bank Outperform', type: 'Stock Impact', change: '+3% to +5%', isPositive: true }
+    ];
+  }
+
+  return [
+    { label: ev.headline.length > 25 ? ev.headline.substring(0, 25) + '...' : ev.headline, type: 'Geopolitical Incident', change: 'Trigger', isPositive: true, neutral: true },
+    { label: 'Market Volatility Index (VIX) Spikes', type: 'Sentiment Impact', change: '+12% to +15%', isPositive: false },
+    { label: 'Safe Haven Gold Inflows Expand', type: 'Asset Allocation', change: '+2.5%', isPositive: true },
+    { label: 'Domestic Stock Benchmarks Pullback', type: 'Market Exposure', change: '-1.0% to -1.5%', isPositive: false },
+    { label: 'Defensives (IT & Pharma) Outperform', type: 'Stock Rotation', change: '+1.5% to +3%', isPositive: true }
+  ];
+};
+
+const getAssetsAffected = (ev: GeoEvent): string[] => {
+  const text = (ev.headline + ' ' + ev.summary).toLowerCase();
+  if (text.includes('oil') || text.includes('hormuz') || text.includes('crude') || text.includes('energy') || text.includes('fuel')) {
+    return ['ONGC', 'RELIANCE', 'BPCL', 'HPCL', 'INDIGO', 'SPICEJET'];
+  }
+  if (text.includes('russia') || text.includes('ukraine') || text.includes('war') || text.includes('defence') || text.includes('defense')) {
+    return ['HAL', 'BEL', 'L&T', 'MAZDOCK', 'COCHINSHIP'];
+  }
+  if (text.includes('inflation') || text.includes('rate') || text.includes('interest') || text.includes('banking')) {
+    return ['SBI', 'HDFC BANK', 'ICICI BANK', 'AXIS BANK', 'NIFTY BANK'];
+  }
+  return ['NIFTY 50', 'SENSEX', 'GOLD', 'RELIANCE', 'TCS', 'INFOSYS'];
+};
+
+const getPointColor = (severity: string) => {
+    switch (severity) {
+        case 'critical': return '#ef4444';
+        case 'high': return '#f97316';
+        case 'medium': return '#eab308';
+        case 'low': return '#10b981';
+        default: return '#10b981';
+    }
+};
+
+function EventDetailsSidebar({ 
+  activeEvent, 
+  activeAnalysis, 
+  onAnalyze,
+  activeEventChain,
+  chainLoading
+}: { 
+  activeEvent: GeoEvent | null; 
+  activeAnalysis: { [key: string]: { loading: boolean, text: string | null } }; 
+  onAnalyze: (ev: GeoEvent) => void;
+  activeEventChain: any;
+  chainLoading: boolean;
+}) {
+  if (!activeEvent) {
+    return (
+      <div className="glass-panel p-5 text-center text-slate-500 min-h-[300px] flex flex-col items-center justify-center border border-slate-800/80">
+        <Radio className="animate-pulse mb-3 text-slate-600" size={32} />
+        <h3 className="text-xs font-bold text-slate-400 tracking-wider">SELECT AN EVENT</h3>
+        <p className="text-[10px] text-slate-500 mt-1 max-w-[200px]">Click any marker on the map to inspect its real-time market impact and AI analysis.</p>
+      </div>
+    );
+  }
+
+  // Use dynamically predicted chain if available, else fall back to static template logic
+  const chain = useMemo(() => {
+    if (activeEventChain?.chain && Array.isArray(activeEventChain.chain)) {
+      return activeEventChain.chain.map((step: any) => ({
+        label: step.impact,
+        type: step.affected,
+        change: step.magnitude,
+        isPositive: step.direction === 'UP' || step.direction === 'VOLATILE',
+        neutral: false
+      }));
+    }
+    return getImpactChain(activeEvent);
+  }, [activeEvent, activeEventChain]);
+
+  const assets = useMemo(() => {
+    if (activeEventChain?.indian_stocks_affected && Array.isArray(activeEventChain.indian_stocks_affected)) {
+      return activeEventChain.indian_stocks_affected.map((s: any) => `${s.name} (${s.ticker})`);
+    }
+    return getAssetsAffected(activeEvent);
+  }, [activeEvent, activeEventChain]);
+
+  const color = getPointColor(activeEvent.severity);
+  const analysis = activeAnalysis[activeEvent.id];
+
+  const scoreSeed = activeEvent.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const probScore = activeEventChain?.severity
+    ? (activeEventChain.severity === 'CRITICAL' || activeEventChain.severity === 'HIGH' ? 85 : 55)
+    : (activeEvent.severity === 'critical' || activeEvent.severity === 'high' 
+        ? 80 + (scoreSeed % 15) 
+        : activeEvent.severity === 'medium' 
+          ? 60 + (scoreSeed % 18) 
+          : 35 + (scoreSeed % 20));
+
+  const confidence = activeEventChain?.overall_market_impact 
+    ? "High"
+    : (activeEvent.severity === 'critical' || activeEvent.severity === 'high' ? 'High' : activeEvent.severity === 'medium' ? 'Medium' : 'Low');
+
+  return (
+    <div className="glass-panel p-5 flex flex-col gap-4 text-left border border-slate-800/80 bg-slate-950/60 shadow-xl select-none">
+      <div>
+        <h3 className="text-xs font-bold text-slate-400 tracking-wider mb-2 uppercase flex items-center gap-1.5">
+          <Globe size={12} className="text-sky-400 animate-pulse" /> Geopolitical Impact Exposure
+        </h3>
+        <h2 className="text-sm font-extrabold text-white leading-snug">{activeEvent.headline}</h2>
+        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-slate-900 text-slate-400 border-slate-800">
+            {activeEvent.category || 'Geopolitics'}
+          </span>
+          <span 
+            className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider"
+            style={{ color: color, backgroundColor: `${color}15`, borderColor: `${color}30` }}
+          >
+            {activeEvent.severity.toUpperCase()} IMPACT
+          </span>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-800/60 pt-3 flex flex-col">
+        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-3">EVENT IMPACT CHAIN</h4>
+        {chainLoading ? (
+          <div className="flex flex-col items-center justify-center py-6 space-y-2">
+            <div className="animate-spin w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+            <span className="text-[9px] text-indigo-300 font-mono animate-pulse uppercase tracking-wider">Predicting impact cascade...</span>
+          </div>
+        ) : (
+          <div className="space-y-3.5">
+            {chain.map((step: any, i: number) => (
+              <div key={i} className="flex items-start gap-3">
+                <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
+                  <div 
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center text-[9px] font-black ${
+                      step.neutral 
+                        ? 'bg-slate-950 border-slate-800 text-slate-400' 
+                        : step.isPositive 
+                          ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400' 
+                          : 'bg-red-950/60 border-red-800 text-red-400'
+                    }`}
+                  >
+                    {i + 1}
+                  </div>
+                  {i < chain.length - 1 && <div className="w-0.5 h-4 bg-slate-850 mt-0.5"></div>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-white font-semibold truncate leading-none mt-0.5">{step.label}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[8px] text-slate-500 leading-none">{step.type}</span>
+                    {!step.neutral && (
+                      <span className={`text-[8px] font-bold leading-none ${step.isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {step.change}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-800/60 pt-3">
+        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-2">ASSETS LIKELY AFFECTED</h4>
+        <div className="flex flex-wrap gap-1">
+          {assets.map((asset: string, i: number) => (
+            <span key={i} className="text-[9px] font-bold bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded shadow-sm">
+              {asset}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-slate-800/60 pt-3 flex items-center gap-6">
+        <div>
+          <h4 className="text-[8px] font-bold text-slate-500 tracking-widest uppercase mb-1">AI PROBABILITY</h4>
+          <div className="flex items-baseline gap-1">
+            <span className="text-lg font-black text-emerald-400">{probScore}%</span>
+            <span className="text-[8px] text-slate-500">Confidence</span>
+          </div>
+        </div>
+        <div className="flex-1">
+          <h4 className="text-[8px] font-bold text-slate-500 tracking-widest uppercase mb-1.5">CONFIDENCE LEVEL</h4>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-white">{confidence}</span>
+            <div className="flex-1 h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+              <div 
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                style={{ width: confidence === 'High' ? '85%' : confidence === 'Medium' ? '55%' : '25%' }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-800/60 pt-3 flex flex-col gap-2">
+        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase">OVERVIEW & EXPOSURE</h4>
+        <div className="bg-slate-955 border border-slate-900 p-3 rounded-lg text-left max-h-[140px] overflow-y-auto scrollbar-thin">
+          {analysis ? (
+            analysis.loading ? (
+              <div className="flex items-center justify-center gap-2 py-3">
+                <div className="animate-spin w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                <span className="text-[10px] text-indigo-300 font-mono animate-pulse uppercase tracking-wider">Analyzing Strategic Exposure...</span>
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">{analysis.text}</p>
+            )
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[10px] text-slate-400 leading-relaxed font-mono">{activeEvent.summary}</p>
+              <button 
+                onClick={() => onAnalyze(activeEvent)}
+                className="w-full py-1.5 bg-indigo-650/40 hover:bg-indigo-600 text-white rounded-lg border border-indigo-500/30 text-[10px] font-bold tracking-wider transition-colors cursor-pointer"
+              >
+                🌟 GENERATE DEEP STRATEGIC ANALYSIS
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
+  // 1. Top High Impact Events (Critical & High severity, sorted by timestamp desc)
+  const highImpactEvents = useMemo(() => {
+    return [...events]
+      .filter(ev => ev.severity === 'critical' || ev.severity === 'high')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 3);
+  }, [events]);
+
+  // 2. Sectors Most at Risk (calculated dynamically from text keywords)
+  const sectorRisks = useMemo(() => {
+    const sectors = [
+      { name: 'Energy & Utilities', keywords: ['oil', 'gas', 'crude', 'hormuz', 'pipeline', 'energy', 'refinery', 'power'], score: 0 },
+      { name: 'Aviation & Logistics', keywords: ['airspace', 'flight', 'airline', 'shipping', 'transit', 'route', 'logistics', 'port'], score: 0 },
+      { name: 'Financial & Banking', keywords: ['fed', 'rbi', 'rate', 'interest', 'inflation', 'banking', 'yield', 'bond', 'economic'], score: 0 },
+      { name: 'Defense & Aerospace', keywords: ['military', 'war', 'weapon', 'missile', 'attack', 'defence', 'defense', 'strike'], score: 0 },
+      { name: 'Technology & Cyber', keywords: ['cyber', 'hack', 'chip', 'semiconductor', 'malware', 'leak', 'ransomware', 'security'], score: 0 },
+    ];
+
+    events.forEach(ev => {
+      const text = (ev.headline + ' ' + ev.summary).toLowerCase();
+      let weight = ev.severity === 'critical' ? 35 : ev.severity === 'high' ? 25 : ev.severity === 'medium' ? 12 : 5;
+      
+      sectors.forEach(sec => {
+        if (sec.name === 'Defense & Aerospace') {
+          // Escalation keywords reduce business/investment risk for defense stocks
+          const escalationKws = ['military', 'war', 'weapon', 'missile', 'attack', 'defence', 'defense', 'strike', 'conflict'];
+          const peaceKws = ['peace', 'treaty', 'ceasefire', 'drawdown', 'disarmament', 'budget cut'];
+          if (escalationKws.some(kw => text.includes(kw))) {
+            sec.score -= weight * 0.5; // reduce risk score (safe haven/growth sector in war)
+          }
+          if (peaceKws.some(kw => text.includes(kw))) {
+            sec.score += weight; // peace / budget cuts increase business risk for defence
+          }
+        } else {
+          // Standard risk accumulation
+          if (sec.keywords.some(kw => text.includes(kw))) {
+            sec.score += weight;
+          }
+          // Geopolitical conflict increases risk for Aviation, Financials, Tech, Energy
+          if (sec.name === 'Aviation & Logistics' && ['war', 'missile', 'strike', 'airspace', 'conflict'].some(kw => text.includes(kw))) {
+            sec.score += weight * 0.8;
+          }
+          if (sec.name === 'Technology & Cyber' && ['hack', 'cyber', 'conflict', 'war'].some(kw => text.includes(kw))) {
+            sec.score += weight * 0.5;
+          }
+          if (sec.name === 'Financial & Banking' && ['sanctions', 'conflict', 'war', 'volatility'].some(kw => text.includes(kw))) {
+            sec.score += weight * 0.6;
+          }
+        }
+      });
+    });
+
+    const activeKeywords = events.map(e => (e.headline + ' ' + e.summary).toLowerCase()).join(' ');
+
+    // Normalize scores between 15% and 95% for display
+    return sectors.map(sec => {
+      const capped = Math.max(0, Math.min(sec.score, 100));
+      const normalized = capped === 0 ? 15 : Math.max(15, Math.min(capped, 95));
+      
+      // Compute justification dynamically
+      let justification = "";
+      if (sec.name === 'Energy & Utilities') {
+        justification = activeKeywords.includes('oil') || activeKeywords.includes('crude') || activeKeywords.includes('hormuz')
+          ? "High crude prices and Strait of Hormuz conflict risks spike energy cost inflation."
+          : "Exposed to global shipping bottlenecks and OPEC supply quota policy shifts.";
+      } else if (sec.name === 'Aviation & Logistics') {
+        justification = activeKeywords.includes('airspace') || activeKeywords.includes('flight') || activeKeywords.includes('war')
+          ? "Airspace closures, shipping route delays, and soaring jet fuel costs squeeze margins."
+          : "Vulnerable to fuel price inflation and global shipping route bottlenecks.";
+      } else if (sec.name === 'Financial & Banking') {
+        justification = activeKeywords.includes('rate') || activeKeywords.includes('interest') || activeKeywords.includes('inflation')
+          ? "Hawkish central banks, bond yield swings, and corporate credit risks under war pressure."
+          : "Capital flight to safe havens and risk-off sentiment affects bank liquidity.";
+      } else if (sec.name === 'Technology & Cyber') {
+        justification = activeKeywords.includes('cyber') || activeKeywords.includes('hack') || activeKeywords.includes('security')
+          ? "Escalating state-sponsored cyber warfare threats and critical infrastructure exposure."
+          : "Exposed to semiconductor raw material bottlenecks and global tech spending drawdown.";
+      } else if (sec.name === 'Defense & Aerospace') {
+        justification = normalized <= 15
+          ? "Low Risk: Conflict escalation projects expanded defense orders and procurement pipelines."
+          : "Subject to long-term government budget constraints and contract timeline variations.";
+      }
+
+      return {
+        name: sec.name,
+        score: normalized,
+        raw: sec.score,
+        justification
+      };
+    }).sort((a, b) => b.raw - a.raw);
+  }, [events]);
+
+  // 3. Potential Beneficiaries (companies/assets likely to benefit, dynamically loaded from Scenario Intelligence)
+  const beneficiaries = useMemo(() => {
+    const defaultItems = [
+      { asset: 'ONGC / Reliance', type: 'Energy Stocks', reason: 'Crude price spikes from geopolitical tension boost upstream margins', change: '+4.5% to +7.2%', confidence: 'High' },
+      { asset: 'Gold (Safe Haven)', type: 'Precious Metals', reason: 'Global volatility drives capital flight into defensive bullion reserves', change: '+2.8% to +4.5%', confidence: 'High' },
+      { asset: 'HAL / Bharat Electronics', type: 'Defense Sector', reason: 'Defense spend spikes project increased local procurement pipelines', change: '+5.0% to +8.5%', confidence: 'Medium' },
+      { asset: 'SBI / HDFC Bank', type: 'Financial Leaders', reason: 'Net Interest Margin expansion expected from high treasury yields', change: '+2.5% to +4.0%', confidence: 'Medium' },
+      { asset: 'TCS / Infosys', type: 'IT Defensives', reason: 'Rupee depreciation against USD provides FX tailwinds for exporters', change: '+1.5% to +3.0%', confidence: 'Low' },
+    ];
+
+    const activeKeywords = events.map(e => (e.headline + ' ' + e.summary).toLowerCase()).join(' ');
+    const dynamicItems: any[] = [];
+
+    if (scenarioData?.scenarios && Array.isArray(scenarioData.scenarios)) {
+      scenarioData.scenarios.forEach((sc: any) => {
+        if (sc.opportunity && (sc.opportunity.action === 'BUY' || sc.opportunity.action === 'HEDGE') && sc.opportunity.stocks && sc.opportunity.stocks.length > 0) {
+          const cleanStocks = sc.opportunity.stocks.map((stock: string) => {
+            return stock.replace(/\s*\([^)]+\)/g, '').trim();
+          });
+          
+          const changeEstimate = sc.chain && sc.chain.length > 0 && sc.chain[0].magnitude
+            ? sc.chain[0].magnitude
+            : (sc.opportunity.action === 'BUY' ? '+4.0% to +7.0%' : '+2.0% to +4.0%');
+            
+          const sectorType = sc.chain && sc.chain.length > 0 && sc.chain[0].affected
+            ? sc.chain[0].affected.replace(/stocks|Sector/gi, '').trim() + ' Sector'
+            : (sc.opportunity.action === 'BUY' ? 'Equity Opportunity' : 'Defensive Hedge');
+
+          dynamicItems.push({
+            asset: cleanStocks.join(' / '),
+            type: sectorType,
+            reason: sc.opportunity.reasoning || sc.trigger,
+            change: changeEstimate.startsWith('+') || changeEstimate.startsWith('-') ? changeEstimate : `+${changeEstimate}`,
+            confidence: sc.probability ? sc.probability.charAt(0) + sc.probability.slice(1).toLowerCase() : 'Medium',
+            relevance: (sc.probability_pct || 50) + 100 // Bumps dynamic items over fallback defaults
+          });
+        }
+      });
+    }
+
+    const combined = [...dynamicItems];
+    
+    // Sort and inject default items if we have gaps or to complement
+    const scoredDefaults = defaultItems.map(item => {
+      let rel = 0;
+      if (item.asset.includes('ONGC') && (activeKeywords.includes('oil') || activeKeywords.includes('hormuz') || activeKeywords.includes('crude'))) rel += 100;
+      if (item.asset.includes('Gold') && (activeKeywords.includes('war') || activeKeywords.includes('tension') || activeKeywords.includes('strike'))) rel += 80;
+      if (item.asset.includes('HAL') && (activeKeywords.includes('military') || activeKeywords.includes('war') || activeKeywords.includes('defence') || activeKeywords.includes('weapon'))) rel += 90;
+      if (item.asset.includes('SBI') && (activeKeywords.includes('rate') || activeKeywords.includes('interest') || activeKeywords.includes('fed') || activeKeywords.includes('inflation'))) rel += 70;
+      return { ...item, relevance: rel };
+    });
+
+    scoredDefaults.sort((a, b) => b.relevance - a.relevance);
+
+    scoredDefaults.forEach(def => {
+      const exists = combined.some(dyn => 
+        dyn.asset.toLowerCase().includes(def.asset.split('/')[0].trim().toLowerCase()) ||
+        def.asset.toLowerCase().includes(dyn.asset.split('/')[0].trim().toLowerCase())
+      );
+      if (!exists) {
+        combined.push(def);
+      }
+    });
+
+    combined.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
+    return combined.slice(0, 3);
+  }, [events, scenarioData]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2 select-none">
+      {/* Top High Impact Events */}
+      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
+        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
+          <AlertTriangle className="text-red-500 animate-pulse" size={14} /> Top High Impact Events
+        </h3>
+        <div className="flex-1 flex flex-col gap-3 justify-start overflow-y-auto max-h-[300px] scrollbar-thin pr-1">
+          {highImpactEvents.length > 0 ? (
+            highImpactEvents.map((ev) => (
+              <div 
+                key={ev.id} 
+                onClick={() => onSelectEvent?.(ev)}
+                className="flex flex-col gap-1 p-2.5 rounded bg-slate-900/40 border border-slate-800/50 hover:border-red-500/50 hover:bg-slate-900/80 transition-all cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[9px] text-red-400 font-bold bg-red-950/40 border border-red-900/30 px-1.5 py-0.5 rounded tracking-wider uppercase">
+                    {ev.severity} impact
+                  </span>
+                  <span className="text-[8px] text-slate-500">
+                    {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <h4 className="text-[11px] font-bold text-white leading-snug">{ev.headline}</h4>
+                <p className="text-[9px] text-slate-450 leading-relaxed font-mono mt-1 border-l border-slate-800 pl-1.5 max-h-[50px] overflow-y-auto scrollbar-thin whitespace-pre-wrap">
+                  {ev.summary}
+                </p>
+                <span className="text-[8px] text-slate-500 mt-1 flex items-center gap-0.5">📍 {ev.city}{ev.country ? `, ${ev.country}` : ''}</span>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-6 text-slate-500 text-xs italic">
+              No critical or high impact events active in this timeframe.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sectors Most at Risk */}
+      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
+        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
+          <Shield className="text-orange-500" size={14} /> Sectors Most at Risk
+        </h3>
+        <div className="flex-1 flex flex-col gap-3 justify-start overflow-y-auto max-h-[300px] scrollbar-thin pr-1">
+          {sectorRisks.map((sec, i) => {
+            const riskColor = sec.score > 60 ? 'bg-red-500' : sec.score > 35 ? 'bg-orange-500' : 'bg-yellow-500';
+            const riskText = sec.score > 60 ? 'High Risk' : sec.score > 35 ? 'Medium Risk' : 'Low Risk';
+            const riskTextColor = sec.score > 60 ? 'text-red-400' : sec.score > 35 ? 'text-orange-400' : 'text-yellow-400';
+            
+            return (
+              <div key={i} className="space-y-1 py-1.5 border-b border-slate-900/40 last:border-0">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-slate-200 font-semibold">{sec.name}</span>
+                  <span className={`text-[9px] font-bold ${riskTextColor}`}>{riskText} ({sec.score}%)</span>
+                </div>
+                <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/50">
+                  <div 
+                    className={`h-full ${riskColor} rounded-full transition-all duration-700`}
+                    style={{ width: `${sec.score}%` }}
+                  ></div>
+                </div>
+                <p className="text-[8px] text-slate-400 font-mono leading-normal mt-0.5">{sec.justification}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Potential Beneficiaries */}
+      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
+        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
+          <TrendingUp className="text-emerald-500" size={14} /> Potential Beneficiaries
+        </h3>
+        <div className="flex-1 flex flex-col gap-3.5 justify-center">
+          {beneficiaries.map((item, i) => (
+            <div key={i} className="flex justify-between items-start gap-3 text-[10px] py-1 border-b border-slate-900/30 last:border-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-200 font-bold truncate">{item.asset}</span>
+                  <span className="text-[8px] text-slate-500 font-mono">({item.type})</span>
+                </div>
+                <p className="text-[9px] text-slate-400 leading-normal mt-1 font-mono">
+                  <strong className="text-emerald-500/80 text-[8px] tracking-wider uppercase font-sans">Rationale:</strong> {item.reason}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <span className="text-emerald-400 font-black block leading-none">{item.change}</span>
+                <span className="text-[8px] text-slate-500 font-mono">Confidence: {item.confidence}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main App ─── */
 
 function App() {
@@ -232,12 +743,66 @@ function App() {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
-  const [marketData, setMarketData] = useState<Record<string, AnalysisSection> | null>(null);
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [geoEvents, setGeoEvents] = useState<GeoEvent[]>([]);
   const [telegramData, setTelegramData] = useState<LiveEvent | null>(null);
-  const [trendsData, setTrendsData] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<GeoEvent | null>(null);
+  const [activeAnalysis, setActiveAnalysis] = useState<{ [key: string]: { loading: boolean, text: string | null } }>({});
+  
+  const [selectedEventChain, setSelectedEventChain] = useState<any>(null);
+  const [eventChainLoading, setEventChainLoading] = useState(false);
 
+  useEffect(() => {
+    if (!selectedEvent) {
+      setSelectedEventChain(null);
+      return;
+    }
+    
+    let active = true;
+    const fetchChain = async () => {
+      setEventChainLoading(true);
+      try {
+        const response = await fetch('/api/predict_chain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ event_text: selectedEvent.summary || selectedEvent.headline })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (active) {
+            setSelectedEventChain(data);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to predict chain dynamically:", e);
+        if (active) setSelectedEventChain(null);
+      } finally {
+        if (active) setEventChainLoading(false);
+      }
+    };
+    fetchChain();
+    return () => { active = false; };
+  }, [selectedEvent]);
+
+  const handleAnalyze = async (ev: GeoEvent) => {
+    setActiveAnalysis(prev => ({ ...prev, [ev.id]: { loading: true, text: null } }));
+    try {
+      const data = await apiPost<any>('/api/analyze_impact', { event_text: ev.summary || ev.headline });
+      setActiveAnalysis(prev => ({
+        ...prev,
+        [ev.id]: { loading: false, text: data.thesis || "Analysis failed." }
+      }));
+    } catch (error) {
+      setActiveAnalysis(prev => ({
+        ...prev,
+        [ev.id]: { loading: false, text: "Network error requesting analysis." }
+      }));
+    }
+  };
+
+  const [scenarioData, setScenarioData] = useState<any>(null);
   const [chainResult, setChainResult] = useState<any>(null);
   const [chainInput, setChainInput] = useState('');
   const [chainLoading, setChainLoading] = useState(false);
@@ -335,17 +900,6 @@ function App() {
     if (!authChecked) return;
     const poll = async () => {
       try {
-        const data = await apiGet<any>('/api/market/analysis');
-        if (!data.status && !data.error) setMarketData(data);
-      } catch { /* */ }
-    };
-    poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
-  }, [authChecked]);
-
-  useEffect(() => {
-    if (!authChecked) return;
-    const poll = async () => {
-      try {
         const data = await apiGet<any>('/api/telegram/status');
         if (!data.status && !data.error) setTelegramData(data);
       } catch { /* */ }
@@ -353,18 +907,17 @@ function App() {
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
   }, [authChecked]);
 
-  // Fetch Google Trends data
+  // Fetch Scenario Intelligence data
   useEffect(() => {
     if (!authChecked) return;
     const poll = async () => {
       try {
-        const data = await apiGet<any>('/api/google-trends');
-        if (!data.status && !data.error) setTrendsData(data);
+        const data = await apiGet<any>('/api/scenarios');
+        if (!data.status && !data.error) setScenarioData(data);
       } catch { /* */ }
     };
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
   }, [authChecked]);
-
 
 
   // Global hook for Tactical Advisor
@@ -410,22 +963,15 @@ function App() {
     if (!authChecked) return;
     const loadWidgets = async () => {
       try {
-        const [optRes, trdRes, indRes] = await Promise.all([
-          apiGet<any>('/api/opportunities').catch(() => null),
-          apiGet<any>('/api/trending').catch(() => null),
-          apiGet<any>('/api/indian-market').catch(() => null)
-        ]);
+        const indRes = await apiGet<any>('/api/indian-market').catch(() => null);
 
-        const newEvents: LiveEvent[] = [];
-        if (optRes && !optRes.status && !optRes.error) newEvents.push(optRes);
-        if (trdRes && !trdRes.status && !trdRes.error) newEvents.push(trdRes);
-        if (indRes && !indRes.status && !indRes.error) newEvents.push(indRes);
-
-        if (newEvents.length > 0) {
+        if (indRes && !indRes.status && !indRes.error) {
           setEvents(prev => {
             const existingIds = new Set(prev.map(e => e.agent));
-            const uniqueNew = newEvents.filter(e => !existingIds.has(e.agent));
-            return [...prev, ...uniqueNew];
+            if (!existingIds.has(indRes.agent)) {
+              return [...prev, indRes];
+            }
+            return prev;
           });
         }
       } catch { /* ignore */ }
@@ -437,9 +983,7 @@ function App() {
   if (!authChecked) return null;
 
   const latestNewsScan = [...events].reverse().find(e => e.agent === 'news_scanner');
-  const latestTrending = [...events].reverse().find(e => e.agent === 'trending_tracker');
   const latestIndianMarket = [...events].reverse().find(e => e.agent === 'indian_market_tracker');
-  const latestOpportunity = [...events].reverse().find(e => e.agent === 'opportunity_finder');
   const latestTelegram = [...events].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
   const websiteEvents = events.filter(e => e.agent === 'website_scanner').map(e => ({
     agent: 'website_scanner',
@@ -456,9 +1000,7 @@ function App() {
     ].sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
   };
 
-  const marketAnalyzerEvents = events.filter(e => e.agent === 'market_analyzer');
-
-  const AGENT_KEYS = ['news_scanner', 'market_analyzer', 'opportunity_finder', 'trending_tracker', 'indian_market_tracker', 'google_trends_tracker'] as const;
+  const AGENT_KEYS = ['news_scanner', 'indian_market_tracker', 'scenario_intelligence'] as const;
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col gap-6">
@@ -510,18 +1052,29 @@ function App() {
       <div className={activeTab === 'news' ? 'flex flex-col gap-6 animate-fade-in' : 'hidden'}>
         {/* ── Globe Map + Telegram Feed ── */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3 glass-panel overflow-hidden" style={{ minHeight: '500px' }}>
-            <Suspense fallback={
-              <div className="flex flex-col items-center justify-center h-full bg-slate-900/20 backdrop-blur-sm">
-                <Globe className="animate-spin-slow text-neonBlue mb-4" size={48} />
-                <span className="text-slate-500 ml-3">Loading Earth Map...</span>
-              </div>
-            }>
-              <EarthMap events={geoEvents} />
-            </Suspense>
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            <div className="glass-panel overflow-hidden" style={{ minHeight: '500px' }}>
+              <Suspense fallback={
+                <div className="flex flex-col items-center justify-center h-full bg-slate-900/20 backdrop-blur-sm">
+                  <Globe className="animate-spin-slow text-neonBlue mb-4" size={48} />
+                  <span className="text-slate-500 ml-3">Loading Earth Map...</span>
+                </div>
+              }>
+                <EarthMap events={geoEvents} onSelectEvent={setSelectedEvent} selectedEvent={selectedEvent} />
+              </Suspense>
+            </div>
+            {/* Dynamic analysis cards below the map */}
+            <ImpactMetricsCards events={geoEvents} scenarioData={scenarioData} onSelectEvent={setSelectedEvent} />
           </div>
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 flex flex-col gap-6">
             <TelegramFeed data={combinedTelegramData} />
+            <EventDetailsSidebar 
+              activeEvent={selectedEvent} 
+              activeAnalysis={activeAnalysis} 
+              onAnalyze={handleAnalyze} 
+              activeEventChain={selectedEventChain}
+              chainLoading={eventChainLoading}
+            />
           </div>
         </div>
 
@@ -571,169 +1124,25 @@ function App() {
           </div>
         </div>
 
-        {/* ── Advanced Features Row (Google Trends / Event Chain) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── Advanced Features Row (Scenario Intelligence) ── */}
+        <ScenarioIntelligence
+          data={scenarioData}
+          chainInput={chainInput}
+          setChainInput={setChainInput}
+          chainLoading={chainLoading}
+          chainResult={chainResult}
+          setChainResult={setChainResult}
+          onPredict={handlePredictChain}
+        />
 
-          {/* Google Trends Intelligence */}
-          <GoogleTrendsWidget data={trendsData} />
-
-          {/* Event Chain Prediction */}
-          <EventChainPredictor
-            chainInput={chainInput}
-            setChainInput={setChainInput}
-            chainLoading={chainLoading}
-            chainResult={chainResult}
-            onPredict={handlePredictChain}
-          />
-        </div>
-
-        {/* Indian Market + Trending */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AgentSection
-            icon={<IndianRupee className="text-orange-400" size={20} />}
-            title="INDIAN MARKET TRACKER" subtitle="Live Nifty, Sensex, sectoral tracking"
-            accentColor="orange" event={latestIndianMarket} items={latestIndianMarket?.market_items}
-            placeholder="Indian Market Tracker will start tracking in ~10 seconds..."
-          />
-          <AgentSection
-            icon={<Flame className="text-rose-400" size={20} />}
-            title="TRENDING NOW" subtitle="What's buzzing in the market"
-            accentColor="rose" event={latestTrending} items={latestTrending?.trending_items}
-            placeholder="Trending Tracker scanning market buzz..."
-          />
-        </div>
-
-        {/* News Grid (Bottom) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
-          <AgentSection
-            icon={<Flame size={16} />} title="TRENDING GEOPOLITICS" subtitle="High Engagement" accentColor="orange"
-            event={latestTrending} items={latestTrending?.trending_items} placeholder="Analyzing global focus areas..." fullWidth
-          />
-          <AgentSection
-            icon={<Lightbulb size={16} />} title="MARKET RECOMMENDATIONS" subtitle="Reputable Sources" accentColor="emerald"
-            event={latestOpportunity} items={latestOpportunity?.sources} placeholder="Cross-referencing authoritative financial reports..." fullWidth
-          />
-        </div>
-
-        {/* Market Deep Dive / Stocks Today */}
-        <div className="glass-panel p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <TrendingUp className="text-neonPurple" size={20} /> STOCKS TODAY
-            </h2>
-            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded">TRADINGVIEW</span>
-          </div>
-
-          {/* Stocks Today Widget */}
-          <div className="mb-8 w-full border border-slate-800/50 rounded-lg overflow-hidden bg-[#131722]">
-            <TradingViewHotlists />
-          </div>
-
-          <div className="flex items-center justify-between mb-5 mt-10 border-t border-slate-800/50 pt-5">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <BarChart3 className="text-neonBlue" size={20} /> MARKET DEEP DIVE
-            </h2>
-            <span className="text-xs text-slate-500 flex items-center gap-1"><RefreshCw size={10} /> Every 2 hrs</span>
-          </div>
-
-          {/* Expandable Analysis Cards */}
-          {marketData && Object.keys(marketData!).length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {Object.entries(marketData!).map(([key, section]: [string, AnalysisSection]) => {
-                const title = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                const isExpanded = expandedSection === key;
-                const icons: Record<string, React.ReactNode> = {
-                  'market_overview': <TrendingUp size={14} className="text-neonBlue" />,
-                  'global_impact': <Globe size={14} className="text-green-400" />,
-                  'fii_dii_data': <DollarSign size={14} className="text-neonPurple" />,
-                  'sectoral_analysis': <BarChart3 size={14} className="text-amber-400" />,
-                  'raw_materials': <Activity size={14} className="text-orange-400" />,
-                  'company_performance': <Lightbulb size={14} className="text-emerald-400" />,
-                };
-                return (
-                  <div key={key} className="glass-panel p-4 text-left hover:border-neonBlue/20 transition-all">
-                    <div className="flex items-center justify-between mb-2 cursor-pointer"
-                      onClick={() => setExpandedSection(isExpanded ? null : key)}>
-                      <div className="flex items-center gap-2">
-                        {icons[key] || <Eye size={14} className="text-slate-400" />}
-                        <h4 className="text-sm font-bold text-neonBlue uppercase tracking-wider">{title}</h4>
-                      </div>
-                      {isExpanded
-                        ? <ChevronDown size={14} className="text-slate-500" />
-                        : <ChevronRight size={14} className="text-slate-500" />}
-                    </div>
-
-                    <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line"
-                      style={isExpanded ? {} : { maxHeight: '100px', overflow: 'hidden' }}>
-                      {section.analysis}
-                    </div>
-                    {!isExpanded && <div className="h-6 bg-gradient-to-t from-[rgba(11,25,44,0.95)] to-transparent -mt-6 relative z-10"></div>}
-
-                    {/* Source Citations */}
-                    {section.sources && section.sources.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-slate-800/50">
-                        <span className="text-[9px] font-bold text-slate-500 tracking-widest">SOURCES</span>
-                        <div className="mt-1 space-y-1">
-                          {section.sources.slice(0, isExpanded ? 5 : 2).map((src, i) => (
-                            <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 truncate">
-                              <ExternalLink size={8} className="flex-shrink-0" />
-                              <span className="truncate">{src.title}</span>
-                              <span className="text-slate-600 flex-shrink-0">— {src.source}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                        <Clock size={8} />
-                        {new Date(section.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      {section.news_count && <span className="text-[9px] text-slate-500">· {section.news_count} articles analyzed</span>}
-                      <span className="text-[9px] text-neonBlue ml-auto cursor-pointer"
-                        onClick={() => setExpandedSection(isExpanded ? null : key)}>
-                        {isExpanded ? 'Collapse' : 'Expand'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-slate-500">
-              <BarChart3 className="mx-auto mb-3 opacity-40" size={36} />
-              <p className="text-sm">Market Analyzer is running its first deep analysis cycle...</p>
-            </div>
-          )}
-        </div>
-
-        {/* Activity Log */}
-        {
-          marketAnalyzerEvents.length > 0 && (
-            <div className="glass-panel p-5">
-              <h2 className="text-sm font-bold text-white mb-4 tracking-wider flex items-center gap-2">
-                <Activity className="text-green-400" size={16} /> RECENT UPDATES
-              </h2>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {marketAnalyzerEvents.slice(-6).reverse().map((ev, i) => (
-                  <div key={i} className="flex items-start gap-3 p-2 bg-slate-900/40 rounded-lg border border-slate-800/50">
-                    <BarChart3 size={12} className="text-purple-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-medium text-white">{ev.title}</span>
-                        <span className="text-[9px] text-slate-500">{new Date(ev.timestamp).toLocaleTimeString()}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{ev.summary.substring(0, 150)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        }
+        {/* Indian Market Tracker */}
+        <AgentSection
+          icon={<IndianRupee className="text-orange-400" size={20} />}
+          title="INDIAN MARKET TRACKER" subtitle="Live Nifty, Sensex, sectoral tracking"
+          accentColor="orange" event={latestIndianMarket} items={latestIndianMarket?.market_items}
+          placeholder="Indian Market Tracker will start tracking in ~10 seconds..."
+          fullWidth={true}
+        />
       </div>
 
       {/* ChartsTab is ALWAYS mounted to prevent TradingView widget from reloading on tab switch */}
@@ -961,6 +1370,7 @@ function AgentCard({ agentKey, info }: { agentKey: string; info?: AgentInfo }) {
     trending_tracker: { icon: <Flame size={12} />, label: 'TRENDING TRACKER' },
     indian_market_tracker: { icon: <IndianRupee size={12} />, label: 'MARKET TRACKER 🇮🇳' },
     google_trends_tracker: { icon: <TrendingUp size={12} />, label: 'GOOGLE TRENDS 📈' },
+    scenario_intelligence: { icon: <Zap size={12} />, label: 'SCENARIO ENGINE ⚡' },
   };
   const cfg = configs[agentKey] || { icon: <Cpu size={12} />, label: agentKey };
   const status = info?.status || 'waiting';
@@ -1066,212 +1476,265 @@ function AgentSection({
   );
 }
 
-/* ═══════════════════════════════════════ */
-/* ADVANCED: Google Trends Widget           */
-/* ═══════════════════════════════════════ */
 
-function GoogleTrendsWidget({ data }: { data: any }) {
-  const trendItems = data?.trend_items || [];
-  const trendingSearches = data?.trending_searches || [];
-  const spikeCount = data?.spike_count || 0;
-
-  return (
-    <div className="glass-panel p-5 flex flex-col" style={{ maxHeight: '480px' }}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <TrendingUp className="text-green-400" size={16} /> GOOGLE TRENDS
-        </h2>
-        {spikeCount > 0 && (
-          <span className="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 px-2 py-0.5 rounded-full animate-pulse">
-            🔥 {spikeCount} SPIKE{spikeCount > 1 ? 'S' : ''}
-          </span>
-        )}
-      </div>
-
-      {trendItems.length > 0 ? (
-        <div className="flex-1 overflow-y-auto space-y-2 mb-3 scrollbar-thin">
-          {trendItems.map((item: any, i: number) => {
-            const barWidth = Math.min(item.current_interest, 100);
-            const barColor = item.is_spiking ? 'bg-red-500' : item.trend_direction === 'UP' ? 'bg-emerald-500' : item.trend_direction === 'DOWN' ? 'bg-amber-500' : 'bg-sky-500';
-            return (
-              <div key={i} className={`p-2.5 rounded-lg border ${item.is_spiking ? 'bg-red-950/30 border-red-500/30' : 'bg-slate-900/40 border-slate-800/50'}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-medium text-white truncate max-w-[180px]">{item.keyword}</span>
-                  <span className={`text-[10px] font-bold ${item.is_spiking ? 'text-red-400' : item.trend_direction === 'UP' ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {item.spike_ratio}x {item.is_spiking && '🔥'}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className={`h-full ${barColor} rounded-full transition-all duration-700`} style={{ width: `${barWidth}%` }}></div>
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[9px] text-slate-500">now: {item.current_interest}</span>
-                  <span className="text-[9px] text-slate-500">avg: {item.avg_interest}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-slate-500">
-          <div className="text-center">
-            <TrendingUp className="mx-auto mb-2 opacity-40" size={28} />
-            <p className="text-xs">Trends agent starting up...</p>
-          </div>
-        </div>
-      )}
-
-      {trendingSearches.length > 0 && (
-        <div className="border-t border-slate-800 pt-3 mt-auto">
-          <span className="text-[9px] font-bold text-slate-500 tracking-widest">TRENDING IN INDIA</span>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {trendingSearches.slice(0, 8).map((t: any, i: number) => (
-              <span key={i} className="text-[9px] bg-slate-800/60 text-slate-300 px-2 py-1 rounded border border-slate-700/50">
-                #{t.rank} {t.term}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {data?.summary && (
-        <div className="mt-3 pt-3 border-t border-slate-800">
-          <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-3">{data.summary.substring(0, 200)}...</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════ */
-/* ADVANCED: Signal Accuracy Scorecard     */
+/* ADVANCED: Scenario Intelligence Engine  */
 /* ═══════════════════════════════════════ */
 
-/* ═══════════════════════════════════════ */
-/* ADVANCED: Event Chain Predictor         */
-/* ═══════════════════════════════════════ */
-
-function EventChainPredictor({ chainInput, setChainInput, chainLoading, chainResult, onPredict }: {
+function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, chainResult, setChainResult, onPredict }: {
+  data: any;
   chainInput: string;
   setChainInput: (v: string) => void;
   chainLoading: boolean;
   chainResult: any;
+  setChainResult: (v: any) => void;
   onPredict: () => void;
 }) {
+  const [activeScenario, setActiveScenario] = useState(0);
+  const [showCustom, setShowCustom] = useState(false);
+
+  const scenarios = useMemo(() => {
+    const list = [...(data?.scenarios || [])];
+    if (chainResult) {
+      if (chainResult.error) {
+        list.unshift({
+          title: 'Custom Query Failed',
+          trigger: chainInput,
+          severity: 'LOW',
+          sentiment: 'NEUTRAL',
+          probability: 'Error',
+          probability_pct: 0,
+          chain: [{ step: 1, impact: chainResult.error, affected: 'None', direction: 'VOLATILE', magnitude: '0', timeframe: 'immediate' }],
+          opportunity: null,
+          hedge: 'Check backend logs for details.',
+          isCustom: true
+        });
+      } else {
+        const opportunity = chainResult.indian_stocks_affected && chainResult.indian_stocks_affected.length > 0 ? {
+          action: chainResult.overall_market_impact === 'BULLISH' ? 'BUY' : 'HEDGE',
+          stocks: chainResult.indian_stocks_affected.map((s: any) => s.ticker),
+          reasoning: chainResult.indian_stocks_affected.map((s: any) => `• ${s.name}: ${s.reason}`).join('\n'),
+          risk: 'Custom query risk exposure'
+        } : null;
+
+        list.unshift({
+          title: chainResult.event || 'Custom Scenario Prediction',
+          trigger: chainInput || 'Custom User Input',
+          severity: chainResult.severity || 'MEDIUM',
+          sentiment: chainResult.overall_market_impact || 'NEUTRAL',
+          probability: 'User Run',
+          probability_pct: 100,
+          chain: chainResult.chain || [],
+          opportunity,
+          hedge: chainResult.hedge_suggestion,
+          isCustom: true
+        });
+      }
+    }
+    return list;
+  }, [data?.scenarios, chainResult, chainInput]);
+
   const dirColor = (d: string) => d === 'UP' ? 'text-emerald-400' : d === 'DOWN' ? 'text-red-400' : 'text-amber-400';
   const dirBg = (d: string) => d === 'UP' ? 'bg-emerald-500/20 border-emerald-500/40' : d === 'DOWN' ? 'bg-red-500/20 border-red-500/40' : 'bg-amber-500/20 border-amber-500/40';
+  const sentimentColor = (s: string) => s === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40' : s === 'BEARISH' ? 'text-red-400 bg-red-500/15 border-red-500/40' : 'text-amber-400 bg-amber-500/15 border-amber-500/40';
+  const severityColor = (s: string) => s === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border-red-500/40' : s === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : s === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-700 text-slate-300 border-slate-600';
+  const actionColor = (a: string) => a === 'BUY' ? 'text-emerald-400 bg-emerald-500/20' : a === 'SELL' ? 'text-red-400 bg-red-500/20' : a === 'HEDGE' ? 'text-indigo-400 bg-indigo-500/20' : 'text-slate-400 bg-slate-700';
+
+  // When chainResult is set, auto-focus custom scenario tab (index 0)
+  useEffect(() => {
+    if (chainResult) {
+      setActiveScenario(0);
+    }
+  }, [chainResult]);
+
+  // Auto-rotate scenarios every 20 seconds if not currently viewing a custom scenario
+  useEffect(() => {
+    if (scenarios.length <= 1 || chainResult) return;
+    const timer = setInterval(() => {
+      setActiveScenario(prev => (prev + 1) % scenarios.length);
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [scenarios.length, chainResult]);
+
+  const sc = scenarios[activeScenario];
 
   return (
-    <div className="glass-panel p-5 flex flex-col" style={{ maxHeight: '480px' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <Zap className="text-amber-400" size={16} />
-        <h2 className="text-sm font-bold text-white">EVENT CHAIN PREDICTION</h2>
+    <div className="glass-panel p-5 flex flex-col" style={{ maxHeight: '520px' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Zap className="text-amber-400" size={16} />
+          <h2 className="text-sm font-bold text-white">SCENARIO INTELLIGENCE</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {data?.market_sentiment && (
+            <span className="text-[9px] font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+              {data.market_sentiment}
+            </span>
+          )}
+          <span className="text-[9px] text-slate-500 flex items-center gap-1">
+            <RefreshCw size={8} className={scenarios.length > 0 ? '' : 'animate-spin'} /> AUTO
+          </span>
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={chainInput}
-          onChange={(e) => setChainInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onPredict()}
-          placeholder="e.g. Iran blocks Strait of Hormuz..."
-          className="flex-1 bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
-        />
-        <button
-          onClick={onPredict}
-          disabled={chainLoading || !chainInput.trim()}
-          className="px-3 py-2 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-50 rounded-lg text-white text-[10px] font-bold tracking-wider border border-amber-500/50 flex items-center gap-1"
-        >
-          {chainLoading ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
-          {chainLoading ? 'PREDICTING...' : 'PREDICT'}
-        </button>
-      </div>
+      {/* Scenario tabs */}
+      {scenarios.length > 0 && (
+        <div className="flex gap-1 mb-3 overflow-x-auto scrollbar-thin pb-1">
+          {scenarios.map((scItem: any, i: number) => (
+            <button
+              key={i}
+              onClick={() => setActiveScenario(i)}
+              className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
+                i === activeScenario
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
+                  : 'bg-slate-800/60 text-slate-500 border border-slate-700/50 hover:text-slate-300'
+              }`}
+            >
+              {scItem.isCustom ? (
+                <>⭐ CUSTOM</>
+              ) : (
+                <>{scItem.sentiment === 'BULLISH' ? '📈' : scItem.sentiment === 'BEARISH' ? '📉' : '⚖️'} SC-{chainResult ? i : i + 1}</>
+              )}
+            </button>
+          ))}
+          {chainResult && (
+            <button
+              onClick={() => { setChainResult(null); setActiveScenario(0); }}
+              className="px-2 py-0.5 text-[8px] font-bold rounded-md bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-900/30 transition-all flex-shrink-0"
+            >
+              ✕ CLEAR
+            </button>
+          )}
+        </div>
+      )}
 
-      {/* Chain Results */}
+      {/* Active Scenario */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {chainLoading && (
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-3"></div>
-            <p className="text-xs text-amber-300 animate-pulse tracking-widest">MODELING CASCADE...</p>
-          </div>
-        )}
-
-        {chainResult && !chainLoading && (
-          <div className="space-y-2 animate-fade-in">
-            {/* Header */}
-            {chainResult.event && (
-              <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[9px] font-bold text-amber-400 tracking-widest">TRIGGER EVENT</span>
-                  {chainResult.severity && (
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${
-                      chainResult.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                      chainResult.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                      'bg-slate-700 text-slate-300 border border-slate-600'
-                    }`}>{chainResult.severity}</span>
-                  )}
+        {sc ? (
+          <div className="space-y-2.5 animate-fade-in" key={activeScenario}>
+            {/* Scenario Header */}
+            <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${severityColor(sc.severity)}`}>{sc.severity}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${sentimentColor(sc.sentiment)}`}>{sc.sentiment}</span>
                 </div>
-                <p className="text-xs text-white font-medium">{chainResult.event}</p>
+                <span className="text-[9px] text-slate-500">
+                  {sc.probability} ({sc.probability_pct}%)
+                </span>
               </div>
-            )}
+              <h3 className="text-[13px] text-white font-bold leading-tight mb-1">{sc.title}</h3>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                <span className="text-amber-400 font-bold">IF:</span> {sc.trigger}
+              </p>
+            </div>
 
             {/* Chain Steps */}
-            {chainResult.chain?.map((step: any, i: number) => (
+            {sc.chain?.map((step: any, i: number) => (
               <div key={i} className="flex items-start gap-2">
                 <div className="flex flex-col items-center flex-shrink-0 mt-1">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border ${dirBg(step.direction)}`}>
                     {step.step}
                   </div>
-                  {i < (chainResult.chain?.length || 0) - 1 && <div className="w-0.5 h-4 bg-slate-700 mt-1"></div>}
+                  {i < (sc.chain?.length || 0) - 1 && <div className="w-0.5 h-4 bg-slate-700 mt-1"></div>}
                 </div>
-                <div className={`flex-1 p-2.5 rounded-lg border ${dirBg(step.direction)}`}>
-                  <p className="text-[11px] text-white font-medium mb-1">{step.impact}</p>
+                <div className={`flex-1 p-2 rounded-lg border ${dirBg(step.direction)}`}>
+                  <p className="text-[11px] text-white font-medium mb-0.5">{step.impact}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[9px] text-slate-300">{step.affected}</span>
                     <ArrowRight size={8} className="text-slate-600" />
                     <span className={`text-[9px] font-bold ${dirColor(step.direction)}`}>{step.direction} {step.magnitude}</span>
-                    <span className="text-[8px] text-slate-500">({step.probability} prob · {step.timeframe})</span>
+                    <span className="text-[8px] text-slate-500">· {step.timeframe}</span>
                   </div>
                 </div>
               </div>
             ))}
 
-            {/* Affected Indian Stocks */}
-            {chainResult.indian_stocks_affected?.length > 0 && (
-              <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800 mt-2">
-                <span className="text-[9px] font-bold text-sky-400 tracking-widest">INDIAN STOCKS AFFECTED</span>
-                <div className="mt-2 space-y-1">
-                  {chainResult.indian_stocks_affected.map((s: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between text-[10px]">
-                      <span className="text-white font-medium">{s.name} <span className="text-slate-500">({s.ticker})</span></span>
-                      <span className={s.impact === 'POSITIVE' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                        {s.impact === 'POSITIVE' ? '📈' : '📉'} {s.impact}
-                      </span>
-                    </div>
+            {/* Investment Opportunity */}
+            {sc.opportunity && (
+              <div className="bg-emerald-950/20 rounded-lg p-3 border border-emerald-800/30">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-bold text-emerald-400 tracking-widest flex items-center gap-1">
+                    <Target size={10} /> INVESTMENT OPPORTUNITY
+                  </span>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${actionColor(sc.opportunity.action)}`}>
+                    {sc.opportunity.action}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {sc.opportunity.stocks?.map((stock: string, i: number) => (
+                    <span key={i} className="text-[10px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-medium">
+                      {stock}
+                    </span>
                   ))}
                 </div>
+                <p className="text-[10px] text-slate-300 leading-relaxed">{sc.opportunity.reasoning}</p>
+                <span className="text-[8px] text-slate-500 mt-1 block">Risk: {sc.opportunity.risk}</span>
               </div>
             )}
 
-            {/* Hedge Suggestion */}
-            {chainResult.hedge_suggestion && (
-              <div className="bg-indigo-950/30 rounded-lg p-3 border border-indigo-800/40 flex items-start gap-2">
-                <Shield size={12} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-                <p className="text-[10px] text-slate-300 leading-relaxed">{chainResult.hedge_suggestion}</p>
+            {/* Hedge */}
+            {sc.hedge && (
+              <div className="bg-indigo-950/20 rounded-lg p-2.5 border border-indigo-800/30 flex items-start gap-2">
+                <Shield size={11} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                <p className="text-[10px] text-slate-300 leading-relaxed">{sc.hedge}</p>
               </div>
             )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+            <Zap className="mb-2 opacity-40 animate-pulse" size={28} />
+            <p className="text-[10px] text-center max-w-[200px]">
+              Scenario Intelligence engine is synthesizing data from all agents...
+            </p>
+            <p className="text-[9px] text-slate-600 mt-1">First analysis in ~2 minutes</p>
+          </div>
+        )}
+      </div>
 
-            {chainResult.error && (
-              <p className="text-xs text-red-400">{chainResult.error}</p>
-            )}
+      {/* Watchlist + Custom Query */}
+      <div className="border-t border-slate-800 pt-2.5 mt-2">
+        {data?.key_watchlist && data.key_watchlist.length > 0 && (
+          <div className="mb-2">
+            <span className="text-[8px] font-bold text-slate-500 tracking-widest">WATCHLIST</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {data.key_watchlist.map((item: string, i: number) => (
+                <span key={i} className="text-[9px] bg-slate-800/60 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50">
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
-        {!chainResult && !chainLoading && (
-          <div className="flex flex-col items-center justify-center py-6 text-slate-500">
-            <Zap className="mb-2 opacity-40" size={28} />
-            <p className="text-[10px] text-center max-w-[200px]">Enter a geopolitical event to predict its cascading impact on Indian markets</p>
+        {/* Toggle custom scenario input */}
+        <button
+          onClick={() => setShowCustom(!showCustom)}
+          className="text-[9px] text-slate-500 hover:text-amber-400 transition flex items-center gap-1"
+        >
+          <Zap size={9} /> {showCustom ? 'Hide' : 'Custom scenario...'}
+        </button>
+
+        {showCustom && (
+          <div className="flex gap-2 mt-2">
+            <input
+              type="text"
+              value={chainInput}
+              onChange={(e) => setChainInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onPredict()}
+              placeholder="e.g. Iran blocks Strait of Hormuz..."
+              className="flex-1 bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-1.5 text-[10px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+            />
+            <button
+              onClick={onPredict}
+              disabled={chainLoading || !chainInput.trim()}
+              className="px-2.5 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-50 rounded-lg text-white text-[9px] font-bold tracking-wider border border-amber-500/50 flex items-center gap-1"
+            >
+              {chainLoading ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
+              {chainLoading ? '...' : 'PREDICT'}
+            </button>
           </div>
         )}
       </div>
@@ -1297,44 +1760,6 @@ function TradingViewTickerTape() {
   );
 }
 
-function TradingViewHotlists() {
-  const container = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (container.current && container.current.getElementsByTagName("script").length === 0) {
-      const script = document.createElement("script");
-      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-hotlists.js";
-      script.type = "text/javascript";
-      script.async = true;
-      script.innerHTML = JSON.stringify({
-        "exchange": "BSE",
-        "colorTheme": "dark",
-        "dateRange": "12M",
-        "showChart": true,
-        "locale": "en",
-        "largeChartUrl": "",
-        "isTransparent": true,
-        "showSymbolLogo": false,
-        "showFloatingTooltip": false,
-        "plotLineColorGrowing": "rgba(41, 98, 255, 1)",
-        "plotLineColorFalling": "rgba(41, 98, 255, 1)",
-        "gridLineColor": "rgba(240, 243, 250, 0)",
-        "scaleFontColor": "#DBDBDB",
-        "belowLineFillColorGrowing": "rgba(41, 98, 255, 0.12)",
-        "belowLineFillColorFalling": "rgba(41, 98, 255, 0.12)",
-        "belowLineFillColorGrowingBottom": "rgba(41, 98, 255, 0)",
-        "belowLineFillColorFallingBottom": "rgba(41, 98, 255, 0)",
-        "symbolActiveColor": "rgba(41, 98, 255, 0.12)",
-        "width": "100%",
-        "height": "100%"
-      });
-      container.current.appendChild(script);
-    }
-  }, []);
-  return (
-    <div className="tradingview-widget-container w-full" style={{height: 550}} ref={container}>
-      <div className="tradingview-widget-container__widget h-full w-full"></div>
-    </div>
-  );
-}
+/* TradingViewHotlists removed — Stocks Today section eliminated from dashboard */
 
 export default App

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, ExternalLink, Clock, Plus, X, Search, Star } from 'lucide-react';
@@ -14,27 +14,49 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Custom radar pulse icon
+// Custom radar pulse icon with concentric rings from reference image 3
 const createPulseIcon = (color: string) => {
     return L.divIcon({
         className: 'custom-pulse-icon',
-        html: `<div style="
-      width: 16px; 
-      height: 16px; 
-      background-color: ${color}; 
-      border-radius: 50%;
-      box-shadow: 0 0 0 0 rgba(${color}, 0.7);
-      animation: pulse 1.5s infinite;
-    "></div>
-    <style>
-      @keyframes pulse {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 ${color}80; }
-        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0,0,0,0); }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0,0,0,0); }
-      }
-    </style>`,
+        html: `
+            <div class="relative flex items-center justify-center animate-pulse" style="transform: translate(-8px, -8px); width: 16px; height: 16px;">
+                <!-- Center dot with white core -->
+                <div class="absolute w-3.5 h-3.5 rounded-full flex items-center justify-center z-20 shadow-[0_0_12px_${color}]" style="background-color: ${color};">
+                    <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                </div>
+                <!-- Pulsing concentric halos -->
+                <div class="absolute w-6 h-6 rounded-full animate-ping opacity-30" style="border: 2px solid ${color}; animation-duration: 2s; z-index: 10;"></div>
+                <div class="absolute w-10 h-10 rounded-full animate-ping opacity-15" style="border: 1.5px solid ${color}; animation-duration: 3s; animation-delay: 0.5s; z-index: 9;"></div>
+            </div>
+        `,
         iconSize: [16, 16],
         iconAnchor: [8, 8],
+    });
+};
+
+// Custom regional zoning glow icon using native radial gradients
+const createGlowIcon = (color: string, severity: string) => {
+    const size = severity === 'critical' || severity === 'high' ? 100 : severity === 'medium' ? 70 : 50;
+    const half = size / 2;
+    const opacityInner = severity === 'critical' || severity === 'high' ? '0a' : severity === 'medium' ? '06' : '04';
+    const opacityMid = severity === 'critical' || severity === 'high' ? '05' : severity === 'medium' ? '03' : '02';
+    const opacityOuter = severity === 'critical' || severity === 'high' ? '01' : severity === 'medium' ? '01' : '00';
+    return L.divIcon({
+        className: 'zoning-glow-marker',
+        html: `
+            <div style="
+                width: ${size}px;
+                height: ${size}px;
+                border-radius: 50%;
+                background: radial-gradient(circle, ${color}${opacityInner} 0%, ${color}${opacityMid} 30%, ${color}${opacityOuter} 60%, transparent 75%);
+                transform: translate(-${half}px, -${half}px);
+                pointer-events: none;
+                mix-blend-mode: screen;
+                filter: blur(8px);
+            "></div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
     });
 };
 
@@ -51,11 +73,12 @@ const createStarIcon = (color: string) => {
       font-size: 16px;
       filter: drop-shadow(0 0 6px ${color});
       animation: pulse-star 2s infinite;
+      transform: translate(-10px, -10px);
     ">⭐</div>
     <style>
       @keyframes pulse-star {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.3); }
+        0%, 100% { transform: scale(1) translate(-10px, -10px); }
+        50% { transform: scale(1.3) translate(-7.5px, -7.5px); }
       }
     </style>`,
         iconSize: [20, 20],
@@ -84,6 +107,8 @@ interface GeoEvent {
 interface EarthMapProps {
     events: GeoEvent[];
     onAddCustomEvent?: (event: GeoEvent) => void;
+    onSelectEvent?: (event: GeoEvent | null) => void;
+    selectedEvent?: GeoEvent | null;
 }
 
 // Helper: fly to a filtered category's first event
@@ -94,7 +119,7 @@ function FlyToCategory({ targetEvent, markerRefs }: { targetEvent: GeoEvent | nu
     useEffect(() => {
         if (!targetEvent || targetEvent.id === prevTarget.current) return;
         prevTarget.current = targetEvent.id;
-        map.flyTo([targetEvent.lat, targetEvent.lng], 7, { animate: true, duration: 2 });
+        map.flyTo([targetEvent.lat, targetEvent.lng], 6, { animate: true, duration: 2 });
         setTimeout(() => {
             const marker = markerRefs.current[targetEvent.id];
             if (marker) marker.openPopup();
@@ -143,7 +168,7 @@ function MapAutoPanner({ events, markerRefs, isPaused }: { events: GeoEvent[], m
         if (events.length > prevEventsLength.current) {
             const newest = [...events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
             currentIndex.current = events.findIndex(e => e.id === newest.id);
-            map.flyTo([newest.lat, newest.lng], 7, { animate: true, duration: 2.5 });
+            map.flyTo([newest.lat, newest.lng], 6, { animate: true, duration: 2.5 });
             setTimeout(() => {
                 const marker = markerRefs.current[newest.id];
                 if (marker) marker.openPopup();
@@ -155,15 +180,15 @@ function MapAutoPanner({ events, markerRefs, isPaused }: { events: GeoEvent[], m
             if (!isIdle.current || isPaused || events.length === 0) return;
             currentIndex.current = (currentIndex.current + 1) % events.length;
             const targetEvent = events[currentIndex.current];
-            map.flyTo([targetEvent.lat, targetEvent.lng], 6, { animate: true, duration: 2.5 });
+            map.flyTo([targetEvent.lat, targetEvent.lng], 5, { animate: true, duration: 2.5 });
             setTimeout(() => {
                 const marker = markerRefs.current[targetEvent.id];
                 if (marker) marker.openPopup();
             }, 2600);
-        }, 12000);
+        }, 15000);
 
         return () => clearInterval(interval);
-    }, [events, map, markerRefs]);
+    }, [events, map, markerRefs, isPaused]);
 
     return null;
 }
@@ -214,16 +239,44 @@ function getLocationForKeyword(keyword: string): { lat: number; lng: number; cit
     for (const [key, loc] of Object.entries(STOCK_LOCATIONS)) {
         if (lower.includes(key)) return loc;
     }
-    // Default to Mumbai (NSE) for unrecognized Indian stocks
     return { lat: 19.0760, lng: 72.8777, city: 'Mumbai', country: 'India' };
 }
 
-export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
+export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, selectedEvent }: EarthMapProps) {
     const markerRefs = useRef<{ [key: string]: L.Marker }>({});
+    
+    // Sync flyTarget with external selectedEvent updates
+    useEffect(() => {
+        if (selectedEvent) {
+            setFlyTarget(selectedEvent);
+        }
+    }, [selectedEvent]);
     const [timeFilter, setTimeFilter] = useState<number | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
     const [flyTarget, setFlyTarget] = useState<GeoEvent | null>(null);
+
+    // Dynamic country polygon highlights
+    const [geoJsonData, setGeoJsonData] = useState<any>(null);
+    useEffect(() => {
+        // Fetch world borders GeoJSON (lightweight, ~500kb-2mb)
+        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+            .then(res => {
+                if (!res.ok) throw new Error('Primary GeoJSON source failed');
+                return res.json();
+            })
+            .then(data => setGeoJsonData(data))
+            .catch(err => {
+                console.warn("Primary country borders CDN failed, trying fallback:", err);
+                fetch('https://openlayers.org/en/v6.0.1/examples/data/geojson/countries.geojson')
+                    .then(res => {
+                        if (!res.ok) throw new Error('Secondary GeoJSON source failed');
+                        return res.json();
+                    })
+                    .then(data => setGeoJsonData(data))
+                    .catch(e => console.error("All country boundary sources failed", e));
+            });
+    }, []);
 
     // Custom watchlist state
     const [showAddForm, setShowAddForm] = useState(false);
@@ -240,7 +293,6 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
         const lastQuery = localStorage.getItem('artillegence_last_custom_query');
         if (lastQuery && customItems.length === 0) {
             setCustomInput(lastQuery);
-            // Delay slightly to ensure component is ready
             setTimeout(() => {
                 const btn = document.getElementById('btn-track-custom');
                 if (btn) btn.click();
@@ -278,26 +330,41 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
     }, [maxTime, timeFilter]);
 
     const displayEvents = useMemo(() => {
-        let evs = allEvents;
+        let evs = [...allEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (activeCategory) {
             evs = evs.filter(e => (e.category || 'Geopolitics & Telegram') === activeCategory);
         }
-        if (timeFilter === null || timeFilter >= maxTime) return evs;
-        return evs.filter(ev => new Date(ev.timestamp).getTime() <= timeFilter);
+        if (timeFilter !== null && timeFilter < maxTime) {
+            evs = evs.filter(ev => new Date(ev.timestamp).getTime() <= timeFilter);
+        } else if (timeFilter === null && !activeCategory) {
+            // Default live view: show top 20 most recent events to prevent crowding
+            evs = evs.slice(0, 20);
+        }
+        return evs;
     }, [allEvents, timeFilter, maxTime, activeCategory]);
+
+    // Auto-propagate default selection when events change
+    useEffect(() => {
+        if (displayEvents.length > 0) {
+            const newest = [...displayEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+            if (onSelectEvent) {
+                onSelectEvent(newest);
+            }
+        }
+    }, [displayEvents]);
 
     // When user clicks a category → fly to first event of that category
     const handleCategoryClick = useCallback((category: string | null) => {
         setActiveCategory(category);
-        // Find first event for this category and fly to it
         const targetEvents = category
             ? allEvents.filter(e => (e.category || 'Geopolitics & Telegram') === category)
             : allEvents;
         if (targetEvents.length > 0) {
             const newest = [...targetEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-            setFlyTarget({ ...newest }); // spread to create new ref and trigger effect
+            setFlyTarget({ ...newest });
+            if (onSelectEvent) onSelectEvent(newest);
         }
-    }, [allEvents]);
+    }, [allEvents, onSelectEvent]);
 
     const [isSearching, setIsSearching] = useState(false);
 
@@ -308,7 +375,6 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
         const query = customInput;
         localStorage.setItem('artillegence_last_custom_query', query);
         const loc = getLocationForKeyword(query);
-        // Slight random offset so multiple items at same exchange don't overlap
         const offset = () => (Math.random() - 0.5) * 0.8;
         
         let headline = query;
@@ -356,9 +422,11 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
         setShowAddForm(false);
         setIsSearching(false);
 
-        // Fly to the new custom item
-        setTimeout(() => setFlyTarget(newItem), 300);
-    }, [customInput, onAddCustomEvent, isSearching]);
+        setTimeout(() => {
+            setFlyTarget(newItem);
+            if (onSelectEvent) onSelectEvent(newItem);
+        }, 300);
+    }, [customInput, onAddCustomEvent, isSearching, onSelectEvent]);
 
     const handleRemoveCustom = useCallback((id: string) => {
         setCustomItems(prev => prev.filter(item => item.id !== id));
@@ -387,10 +455,83 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
             case 'critical': return '#ef4444';
             case 'high': return '#f97316';
             case 'medium': return '#eab308';
-            case 'low': return '#38bdf8';
-            default: return '#38bdf8';
+            case 'low': return '#10b981';
+            default: return '#10b981';
         }
     };
+
+    const getCountryColor = useCallback((countryName: string, countryCode: string) => {
+        const nameLower = countryName?.toLowerCase().trim() || '';
+        const codeLower = countryCode?.toLowerCase().trim() || '';
+
+        if (!nameLower && !codeLower) return null;
+
+        const countryEvents = displayEvents.filter(ev => {
+            const evCountry = ev.country?.toLowerCase().trim() || '';
+            const evCity = ev.city?.toLowerCase().trim() || '';
+            const evHeadline = ev.headline?.toLowerCase() || '';
+            const evSummary = ev.summary?.toLowerCase() || '';
+
+            let isLocationMatch = false;
+
+            if (evCountry) {
+                if (evCountry === nameLower || evCountry === codeLower) {
+                    isLocationMatch = true;
+                } else if ((nameLower === 'united states' || nameLower === 'united states of america') && (evCountry === 'usa' || evCountry === 'us')) {
+                    isLocationMatch = true;
+                } else if ((nameLower === 'united kingdom' || nameLower === 'uk') && (evCountry === 'uk' || evCountry === 'gb' || evCountry === 'united kingdom')) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'russia' && (evCountry === 'russia' || evCountry === 'russian federation')) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'iran' && (evCountry === 'iran' || evCountry === 'islamic republic of iran')) {
+                    isLocationMatch = true;
+                }
+            }
+
+            if (evCity) {
+                if (evCity === nameLower || evCity === codeLower) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'india' && ['mumbai', 'delhi', 'new delhi', 'bangalore', 'bengaluru', 'chennai', 'kolkata', 'hyderabad', 'pune'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if ((nameLower === 'united states' || nameLower === 'united states of america') && ['new york', 'washington', 'los angeles', 'chicago', 'san francisco', 'houston'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'russia' && ['moscow', 'saint petersburg'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'united kingdom' && ['london', 'belfast', 'birmingham'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'ukraine' && ['kyiv', 'kiev', 'lviv', 'kharkiv', 'odessa'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'israel' && ['tel aviv', 'jerusalem', 'gaza', 'haifa'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'iran' && ['tehran', 'isfahan', 'shiraz'].includes(evCity)) {
+                    isLocationMatch = true;
+                } else if (nameLower === 'lebanon' && ['beirut'].includes(evCity)) {
+                    isLocationMatch = true;
+                }
+            }
+
+            let isHotzoneMatch = false;
+            if (nameLower === 'ukraine' && (evHeadline.includes('ukraine') || evSummary.includes('ukraine'))) {
+                isHotzoneMatch = true;
+            } else if (nameLower === 'israel' && (evHeadline.includes('israel') || evSummary.includes('israel') || evHeadline.includes('gaza') || evSummary.includes('gaza'))) {
+                isHotzoneMatch = true;
+            } else if (nameLower === 'iran' && (evHeadline.includes('iran') || evSummary.includes('iran'))) {
+                isHotzoneMatch = true;
+            }
+
+            return isLocationMatch || isHotzoneMatch;
+        });
+
+        if (countryEvents.length === 0) return null;
+
+        const severities: ('critical' | 'high' | 'medium' | 'low')[] = ['critical', 'high', 'medium', 'low'];
+        for (const sev of severities) {
+            if (countryEvents.some(e => e.severity === sev)) {
+                return getPointColor(sev);
+            }
+        }
+        return '#10b981';
+    }, [displayEvents]);
 
     return (
         <div className="relative w-full rounded-lg overflow-hidden border border-slate-800/80 shadow-2xl" style={{ height: '500px' }}>
@@ -398,22 +539,45 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
                 center={[20, 78]}
                 zoom={4}
                 className="w-full h-full"
-                style={{ background: '#0a0a0a' }}
-                zoomControl={false}
+                style={{ background: '#070a0f' }}
+                zoomControl={true}
             >
-                {/* ESRI World Imagery for Google Earth style satellite view */}
+                {/* Premium flat dark mode tiles showing style of reference image 3 */}
                 <TileLayer
-                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    attribution='&copy; ESRI'
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; OpenStreetMap &copy; CARTO'
                     maxZoom={18}
                 />
 
-                {/* Optional dark label overlay so we can see cities/borders */}
-                <TileLayer
-                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-                    attribution=""
-                    maxZoom={18}
-                />
+                {geoJsonData && (
+                    <GeoJSON
+                        key={displayEvents.map(e => e.id + '-' + e.severity).join('_')}
+                        data={geoJsonData}
+                        style={(feature) => {
+                            const properties = feature?.properties || {};
+                            const countryName = properties.ADMIN || properties.name || properties.Name || '';
+                            const countryCode = properties.ISO_A3 || properties.iso_a3 || properties['ISO3166-1-Alpha-3'] || properties['ISO3166-1-Alpha-2'] || properties.code || '';
+                            const color = getCountryColor(countryName, countryCode);
+                            
+                            if (color) {
+                                return {
+                                    fillColor: color,
+                                    fillOpacity: 0.12,
+                                    color: color,
+                                    weight: 0.8,
+                                    opacity: 0.35
+                                };
+                            }
+                            return {
+                                fillColor: 'transparent',
+                                fillOpacity: 0,
+                                color: '#1e293b',
+                                weight: 0.3,
+                                opacity: 0.06
+                            };
+                        }}
+                    />
+                )}
 
                 <MapAutoPanner events={displayEvents} markerRefs={markerRefs} isPaused={isInteracting} />
                 <FlyToCategory targetEvent={flyTarget} markerRefs={markerRefs} />
@@ -423,112 +587,117 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
                         positions={displayEvents.map(ev => [ev.lat, ev.lng] as [number, number])}
                         color="#38bdf8"
                         weight={1.5}
-                        opacity={0.4}
-                        dashArray="5, 10"
+                        opacity={0.3}
+                        dashArray="4, 8"
                     />
                 )}
 
                 {displayEvents.map((ev) => (
-                    <Marker
-                        key={ev.id}
-                        position={[ev.lat, ev.lng]}
-                        icon={ev.isCustom ? createStarIcon('#fbbf24') : createPulseIcon(getPointColor(ev.severity))}
-                        ref={(r) => { if (r) markerRefs.current[ev.id] = r; }}
-                    >
-                        <Popup className="glass-popup pb-2" autoPan={true} autoPanPaddingTopLeft={[10, 88]} autoPanPaddingBottomRight={[10, 70]}>
-                            <div className={`bg-slate-900/95 border p-4 rounded-lg shadow-xl shadow-black/50 w-[340px] -m-3 max-h-[320px] overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50' : 'border-slate-700'}`}>
-                                <div className="flex items-center gap-2 mb-2 justify-between">
-                                    <div className="flex items-center gap-2">
-                                        {ev.isCustom ? (
-                                            <Star size={10} className="text-amber-400 fill-amber-400" />
-                                        ) : (
-                                            <div className={`w-2 h-2 rounded-full ${ev.severity === 'critical' ? 'bg-red-500' :
-                                                ev.severity === 'high' ? 'bg-orange-500' : 'bg-sky-400'
-                                                }`}></div>
-                                        )}
-                                        <span className="text-[10px] font-bold text-sky-400 tracking-widest uppercase">
-                                            {ev.city}{ev.country ? `, ${ev.country}` : ''}
-                                        </span>
-                                        <span className={`text-[8px] px-1 py-0.5 rounded border uppercase tracking-widest ${ev.isCustom ? 'bg-amber-900/50 text-amber-300 border-amber-700/50' : 'bg-sky-900/50 text-sky-300 border-sky-700/50'}`}>
-                                            {ev.category || 'Geopolitics'}
-                                        </span>
+                    <React.Fragment key={`glow-group-${ev.id}`}>
+                        <Marker
+                            position={[ev.lat, ev.lng]}
+                            icon={createGlowIcon(getPointColor(ev.severity), ev.severity)}
+                            interactive={false}
+                        />
+                        <Marker
+                            position={[ev.lat, ev.lng]}
+                            icon={ev.isCustom ? createStarIcon('#fbbf24') : createPulseIcon(getPointColor(ev.severity))}
+                            ref={(r) => { if (r) markerRefs.current[ev.id] = r; }}
+                            eventHandlers={{
+                                click: () => {
+                                    if (onSelectEvent) {
+                                        onSelectEvent(ev);
+                                    }
+                                }
+                            }}
+                        >
+                            <Popup className="glass-popup pb-2" autoPan={true} autoPanPaddingTopLeft={[10, 88]} autoPanPaddingBottomRight={[10, 70]}>
+                                <div className={`bg-slate-900/95 border p-4 rounded-lg shadow-xl shadow-black/50 w-[300px] -m-3 max-h-[300px] overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50' : 'border-slate-700'}`}>
+                                    <div className="flex items-center gap-2 mb-2 justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {ev.isCustom ? (
+                                                <Star size={10} className="text-amber-400 fill-amber-400" />
+                                            ) : (
+                                                <div className={`w-2 h-2 rounded-full ${ev.severity === 'critical' ? 'bg-red-500' :
+                                                    ev.severity === 'high' ? 'bg-orange-500' : 'bg-sky-400'
+                                                    }`}></div>
+                                            )}
+                                            <span className="text-[9px] font-bold text-sky-400 tracking-widest uppercase truncate max-w-[150px]">
+                                                {ev.city}{ev.country ? `, ${ev.country}` : ''}
+                                            </span>
+                                            <span className={`text-[8px] px-1 py-0.5 rounded border uppercase tracking-widest ${ev.isCustom ? 'bg-amber-900/50 text-amber-300 border-amber-700/50' : 'bg-sky-900/50 text-sky-300 border-sky-700/50'}`}>
+                                                {ev.category || 'Geopolitics'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {ev.isCustom && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveCustom(ev.id); }}
+                                                    className="text-[9px] text-red-400 hover:text-red-300 border border-red-800/50 px-1.5 py-0.5 rounded hover:bg-red-900/30"
+                                                    title="Remove from watchlist"
+                                                >
+                                                    <X size={8} />
+                                                </button>
+                                            )}
+                                            {!activeAnalysis[ev.id] && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleAnalyze(ev); }}
+                                                    className="ml-auto text-[10px] bg-indigo-600/80 hover:bg-indigo-50 text-white px-2 py-0.5 rounded shadow cursor-pointer border border-indigo-450/40 flex items-center gap-0.5 font-bold tracking-wide">
+                                                    ANALYZE
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        {ev.isCustom && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleRemoveCustom(ev.id); }}
-                                                className="text-[9px] text-red-400 hover:text-red-300 border border-red-800/50 px-1.5 py-0.5 rounded hover:bg-red-900/30"
-                                                title="Remove from watchlist"
-                                            >
-                                                <X size={8} />
-                                            </button>
-                                        )}
-                                        {!activeAnalysis[ev.id] && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleAnalyze(ev); }}
-                                                className="ml-auto text-xs bg-indigo-600/80 hover:bg-indigo-500 text-white px-3 py-1 rounded shadow cursor-pointer transition-all border border-indigo-400/50 flex flex-items-center gap-1 font-bold tracking-wide">
-                                                🌟 ANALYZE IMPACT
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {activeAnalysis[ev.id] ? (
-                                    <div className="mt-3 bg-slate-800/50 p-3 rounded border border-indigo-500/30">
-                                        {activeAnalysis[ev.id].loading ? (
-                                            <div className="flex flex-col items-center justify-center py-4 space-y-2">
-                                                <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                                                <span className="text-xs text-indigo-300 font-mono animate-pulse tracking-widest uppercase">Mistral AI Modeling...</span>
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">
-                                                {activeAnalysis[ev.id].text?.split('**').map((chunk, i) =>
-                                                    i % 2 === 1 ? <span key={i} className="font-bold text-indigo-300">{chunk}</span> : chunk
-                                                )}
-                                            </div>
-                                        )}
-                                        <button onClick={() => setActiveAnalysis(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} className="mt-3 w-full text-center text-[10px] text-slate-500 hover:text-slate-300 border border-slate-700 rounded py-1">RETURN TO SOURCE</button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {ev.image_base64 && (
-                                            <div className="mt-3 mb-2 rounded overflow-hidden border border-slate-700/60 shadow-lg">
-                                                <div className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-1 flex items-center justify-between">
-                                                    <span>VISUAL WEB RESEARCH </span>
-                                                    <span className="text-violet-400">GROQ VISION</span>
+                                    {activeAnalysis[ev.id] ? (
+                                        <div className="mt-3 bg-slate-800/50 p-3 rounded border border-indigo-500/30 font-mono">
+                                            {activeAnalysis[ev.id].loading ? (
+                                                <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                                                    <div className="animate-spin w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                                                    <span className="text-[10px] text-indigo-300 font-mono animate-pulse uppercase tracking-wider">Mistral AI Modeling...</span>
                                                 </div>
-                                                <img src={`data:image/jpeg;base64,${ev.image_base64}`} alt="Scraped View" className="w-full h-auto opacity-90 hover:opacity-100 transition-opacity" />
-                                            </div>
-                                        )}
-                                        {ev.telegram_post_id ? (
-                                            <div className="mt-2" style={{ maxHeight: "220px", overflowY: "auto", overflowX: "hidden", borderRadius: "8px", border: "1px solid rgba(56,189,248,0.15)" }}>
-                                                <TelegramEmbed channelSlug={typeof ev.source === "string" ? ev.source.replace("Telegram: ", "") : "CIG_telegram"} postId={ev.telegram_post_id} compact />
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <h4 className="text-sm font-bold text-white leading-tight mb-2 pb-2 border-b border-slate-700/50">{ev.headline}</h4>
-                                                <p className="text-xs text-slate-300 leading-relaxed mb-3 whitespace-pre-wrap">
-                                                    {ev.summary?.split('**').map((chunk, i) =>
-                                                        i % 2 === 1 ? <span key={i} className="font-bold text-sky-400">{chunk}</span> : chunk
-                                                    )}
-                                                </p>
-                                            </>
-                                        )}
-                                    </>
-                                )}
+                                            ) : (
+                                                <div className="text-[10px] text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                                    {activeAnalysis[ev.id].text}
+                                                </div>
+                                            )}
+                                            <button onClick={() => setActiveAnalysis(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} className="mt-3 w-full text-center text-[9px] text-slate-500 hover:text-slate-300 border border-slate-700 rounded py-0.5">RETURN TO SOURCE</button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {ev.image_base64 && (
+                                                <div className="mt-3 mb-2 rounded overflow-hidden border border-slate-700/60 shadow-lg">
+                                                    <img src={`data:image/jpeg;base64,${ev.image_base64}`} alt="Scraped View" className="w-full h-auto opacity-90" />
+                                                </div>
+                                            )}
+                                            {ev.telegram_post_id ? (
+                                                <div className="mt-2" style={{ maxHeight: "150px", overflowY: "auto", overflowX: "hidden", borderRadius: "8px", border: "1px solid rgba(56,189,248,0.15)" }}>
+                                                    <TelegramEmbed channelSlug={typeof ev.source === "string" ? ev.source.replace("Telegram: ", "") : "CIG_telegram"} postId={ev.telegram_post_id} compact />
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <h4 className="text-xs font-bold text-white leading-tight mb-2 pb-1 border-b border-slate-700/50">{ev.headline}</h4>
+                                                    <p className="text-[10px] text-slate-300 leading-relaxed">
+                                                        {ev.summary}
+                                                    </p>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
 
-                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800">
-                                    <a href={ev.url} target="_blank" rel="noopener noreferrer"
-                                        className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1">
-                                        SOURCE <ExternalLink size={10} />
-                                    </a>
-                                    <span className="text-[9px] text-slate-500">
-                                        {new Date(ev.timestamp).toLocaleTimeString()}
-                                    </span>
+                                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800">
+                                        <a href={ev.url} target="_blank" rel="noopener noreferrer"
+                                            className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
+                                            SOURCE <ExternalLink size={8} />
+                                        </a>
+                                        <span className="text-[8px] text-slate-500">
+                                            {new Date(ev.timestamp).toLocaleTimeString()}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        </Popup>
-                    </Marker>
+                            </Popup>
+                        </Marker>
+                    </React.Fragment>
                 ))}
             </MapContainer>
 
@@ -671,7 +840,30 @@ export default function EarthMap({ events, onAddCustomEvent }: EarthMapProps) {
                     right: 8px;
                     z-index: 10;
                 }
+                .zoning-glow {
+                    filter: blur(40px);
+                    pointer-events: none;
+                }
+                .leaflet-overlay-pane svg {
+                    overflow: visible;
+                }
             `}</style>
+
+            {/* Overlay: Legend */}
+            <div className="absolute bottom-6 right-6 bg-slate-950/85 backdrop-blur-md border border-slate-800/80 px-4 py-2 rounded-xl shadow-2xl z-[1000] flex items-center gap-4 pointer-events-auto border-1">
+                <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></div>
+                    <span className="text-[10px] font-bold text-slate-350 uppercase tracking-wider">Low Impact</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#eab308] shadow-[0_0_8px_#eab308]"></div>
+                    <span className="text-[10px] font-bold text-slate-350 uppercase tracking-wider">Medium Impact</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444] shadow-[0_0_8px_#ef4444]"></div>
+                    <span className="text-[10px] font-bold text-slate-350 uppercase tracking-wider">High Impact</span>
+                </div>
+            </div>
         </div >
     );
 }
