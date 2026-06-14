@@ -130,9 +130,9 @@ function FlyToCategory({ targetEvent, markerRefs }: { targetEvent: GeoEvent | nu
 }
 
 // Helper component to auto-fly to the latest event and cycle when idle
-function MapAutoPanner({ events, markerRefs, isPaused }: { events: GeoEvent[], markerRefs: React.MutableRefObject<{ [key: string]: L.Marker }>, isPaused: boolean }) {
+function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: GeoEvent[], markerRefs: React.MutableRefObject<{ [key: string]: L.Marker }>, isPaused: boolean, totalCount: number }) {
     const map = useMap();
-    const prevEventsLength = useRef(0);
+    const prevTotalCount = useRef(0);
     const currentIndex = useRef(0);
     const isIdle = useRef(true);
     const idleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,28 +163,35 @@ function MapAutoPanner({ events, markerRefs, isPaused }: { events: GeoEvent[], m
         };
     }, [map]);
 
-    // Slideshow logic
+    // Handle real-time new event arrival focus
     useEffect(() => {
-        if (events.length > prevEventsLength.current) {
+        if (prevTotalCount.current > 0 && totalCount > prevTotalCount.current) {
             const newest = [...events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-            currentIndex.current = events.findIndex(e => e.id === newest.id);
-            map.flyTo([newest.lat, newest.lng], 6, { animate: true, duration: 2.5 });
-            setTimeout(() => {
-                const marker = markerRefs.current[newest.id];
-                if (marker) marker.openPopup();
-            }, 2600);
-            prevEventsLength.current = events.length;
+            if (newest) {
+                currentIndex.current = events.findIndex(e => e.id === newest.id);
+                map.flyTo([newest.lat, newest.lng], 6, { animate: true, duration: 2.5 });
+                setTimeout(() => {
+                    const marker = markerRefs.current[newest.id];
+                    if (marker) marker.openPopup();
+                }, 2600);
+            }
         }
+        prevTotalCount.current = totalCount;
+    }, [totalCount, events, map, markerRefs]);
 
+    // Slideshow logic (only triggers when idle, does NOT run on render/prop changes)
+    useEffect(() => {
         const interval = setInterval(() => {
             if (!isIdle.current || isPaused || events.length === 0) return;
             currentIndex.current = (currentIndex.current + 1) % events.length;
             const targetEvent = events[currentIndex.current];
-            map.flyTo([targetEvent.lat, targetEvent.lng], 5, { animate: true, duration: 2.5 });
-            setTimeout(() => {
-                const marker = markerRefs.current[targetEvent.id];
-                if (marker) marker.openPopup();
-            }, 2600);
+            if (targetEvent) {
+                map.flyTo([targetEvent.lat, targetEvent.lng], 5, { animate: true, duration: 2.5 });
+                setTimeout(() => {
+                    const marker = markerRefs.current[targetEvent.id];
+                    if (marker) marker.openPopup();
+                }, 2600);
+            }
         }, 15000);
 
         return () => clearInterval(interval);
@@ -309,7 +316,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const allEvents = useMemo(() => [...events, ...customItems], [events, customItems]);
 
     const categories = useMemo(() => {
-        const cats = Array.from(new Set(allEvents.map(e => e.category || 'Geopolitics & Telegram')));
+        const cats = Array.from(new Set(allEvents.map(e => e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram'))));
         return cats;
     }, [allEvents]);
 
@@ -332,7 +339,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const displayEvents = useMemo(() => {
         let evs = [...allEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (activeCategory) {
-            evs = evs.filter(e => (e.category || 'Geopolitics & Telegram') === activeCategory);
+            evs = evs.filter(e => (e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram')) === activeCategory);
         }
         if (timeFilter !== null && timeFilter < maxTime) {
             evs = evs.filter(ev => new Date(ev.timestamp).getTime() <= timeFilter);
@@ -357,7 +364,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const handleCategoryClick = useCallback((category: string | null) => {
         setActiveCategory(category);
         const targetEvents = category
-            ? allEvents.filter(e => (e.category || 'Geopolitics & Telegram') === category)
+            ? allEvents.filter(e => (e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram')) === category)
             : allEvents;
         if (targetEvents.length > 0) {
             const newest = [...targetEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
@@ -579,7 +586,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                     />
                 )}
 
-                <MapAutoPanner events={displayEvents} markerRefs={markerRefs} isPaused={isInteracting} />
+                <MapAutoPanner events={displayEvents} markerRefs={markerRefs} isPaused={isInteracting} totalCount={allEvents.length} />
                 <FlyToCategory targetEvent={flyTarget} markerRefs={markerRefs} />
 
                 {displayEvents.length > 1 && (
