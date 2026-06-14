@@ -478,13 +478,19 @@ function EventDetailsSidebar({
 }
 
 function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
+  const eventsArr = Array.isArray(events) ? events : [];
+
   // 1. Top High Impact Events (Critical & High severity, sorted by timestamp desc)
   const highImpactEvents = useMemo(() => {
-    return [...events]
-      .filter(ev => ev.severity === 'critical' || ev.severity === 'high')
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    return [...eventsArr]
+      .filter(ev => ev && (ev.severity === 'critical' || ev.severity === 'high'))
+      .sort((a, b) => {
+        const timeA = new Date(a.timestamp || 0).getTime();
+        const timeB = new Date(b.timestamp || 0).getTime();
+        return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+      })
       .slice(0, 3);
-  }, [events]);
+  }, [eventsArr]);
 
   // 2. Sectors Most at Risk (calculated dynamically from text keywords)
   const sectorRisks = useMemo(() => {
@@ -496,8 +502,9 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
       { name: 'Technology & Cyber', keywords: ['cyber', 'hack', 'chip', 'semiconductor', 'malware', 'leak', 'ransomware', 'security'], score: 0 },
     ];
 
-    events.forEach(ev => {
-      const text = (ev.headline + ' ' + ev.summary).toLowerCase();
+    eventsArr.forEach(ev => {
+      if (!ev) return;
+      const text = ((ev.headline || '') + ' ' + (ev.summary || '')).toLowerCase();
       let weight = ev.severity === 'critical' ? 35 : ev.severity === 'high' ? 25 : ev.severity === 'medium' ? 12 : 5;
       
       sectors.forEach(sec => {
@@ -580,12 +587,12 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
       { asset: 'TCS / Infosys', type: 'IT Defensives', reason: 'Rupee depreciation against USD provides FX tailwinds for exporters', change: '+1.5% to +3.0%', confidence: 'Low' },
     ];
 
-    const activeKeywords = events.map(e => (e.headline + ' ' + e.summary).toLowerCase()).join(' ');
+    const activeKeywords = eventsArr.map(e => ((e?.headline || '') + ' ' + (e?.summary || '')).toLowerCase()).join(' ');
     const dynamicItems: any[] = [];
 
     if (scenarioData?.scenarios && Array.isArray(scenarioData.scenarios)) {
       scenarioData.scenarios.forEach((sc: any) => {
-        if (sc.opportunity && (sc.opportunity.action === 'BUY' || sc.opportunity.action === 'HEDGE') && sc.opportunity.stocks && sc.opportunity.stocks.length > 0) {
+        if (sc.opportunity && (sc.opportunity.action === 'BUY' || sc.opportunity.action === 'HEDGE') && Array.isArray(sc.opportunity.stocks) && sc.opportunity.stocks.length > 0) {
           const cleanStocks = sc.opportunity.stocks.map((stock: string) => {
             return stock.replace(/\s*\([^)]+\)/g, '').trim();
           });
@@ -858,12 +865,15 @@ function App() {
       try {
         const data = JSON.parse(msg.data);
         if (data.type === 'geo_events_update') {
-          setGeoEvents(data.events as GeoEvent[]);
-        } else if (data.type === 'geo_event') {
+          if (Array.isArray(data.events)) {
+            setGeoEvents(data.events);
+          }
+        } else if (data.type === 'geo_event' && data.id) {
           setGeoEvents(prev => {
-            const exists = prev.some(e => e.id === data.id);
-            if (exists) return prev.map(e => e.id === data.id ? data as GeoEvent : e);
-            return [...prev, data as GeoEvent].slice(-12);
+            const arr = Array.isArray(prev) ? prev : [];
+            const exists = arr.some(e => e.id === data.id);
+            if (exists) return arr.map(e => e.id === data.id ? data as GeoEvent : e);
+            return [...arr, data as GeoEvent].slice(-12);
           });
         } else {
           eventBufferRef.current.push(data);
@@ -982,10 +992,11 @@ function App() {
   // ── Guard: Don't render dashboard until auth is confirmed ──
   if (!authChecked) return null;
 
-  const latestNewsScan = [...events].reverse().find(e => e.agent === 'news_scanner');
-  const latestIndianMarket = [...events].reverse().find(e => e.agent === 'indian_market_tracker');
-  const latestTelegram = [...events].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
-  const websiteEvents = events.filter(e => e.agent === 'website_scanner').map(e => ({
+  const eventsArr = Array.isArray(events) ? events : [];
+  const latestNewsScan = [...eventsArr].reverse().find(e => e.agent === 'news_scanner');
+  const latestIndianMarket = [...eventsArr].reverse().find(e => e.agent === 'indian_market_tracker');
+  const latestTelegram = [...eventsArr].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
+  const websiteEvents = eventsArr.filter(e => e.agent === 'website_scanner').map(e => ({
     agent: 'website_scanner',
     title: e.title || e.headline,
     summary: e.summary,
@@ -996,8 +1007,12 @@ function App() {
   const combinedTelegramData = {
     news_items: [
       ...websiteEvents,
-      ...(latestTelegram?.news_items || [])
-    ].sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+      ...(Array.isArray(latestTelegram?.news_items) ? latestTelegram.news_items : [])
+    ].sort((a, b) => {
+      const timeA = new Date(a?.timestamp || 0).getTime();
+      const timeB = new Date(b?.timestamp || 0).getTime();
+      return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+    })
   };
 
   const AGENT_KEYS = ['news_scanner', 'indian_market_tracker', 'scenario_intelligence'] as const;
@@ -1495,7 +1510,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
   const [showCustom, setShowCustom] = useState(false);
 
   const scenarios = useMemo(() => {
-    const list = [...(data?.scenarios || [])];
+    const list = Array.isArray(data?.scenarios) ? [...data.scenarios] : [];
     if (chainResult) {
       if (chainResult.error) {
         list.unshift({
@@ -1511,7 +1526,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
           isCustom: true
         });
       } else {
-        const opportunity = chainResult.indian_stocks_affected && chainResult.indian_stocks_affected.length > 0 ? {
+        const opportunity = Array.isArray(chainResult.indian_stocks_affected) && chainResult.indian_stocks_affected.length > 0 ? {
           action: chainResult.overall_market_impact === 'BULLISH' ? 'BUY' : 'HEDGE',
           stocks: chainResult.indian_stocks_affected.map((s: any) => s.ticker),
           reasoning: chainResult.indian_stocks_affected.map((s: any) => `• ${s.name}: ${s.reason}`).join('\n'),
@@ -1632,7 +1647,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
             </div>
 
             {/* Chain Steps */}
-            {sc.chain?.map((step: any, i: number) => (
+            {Array.isArray(sc.chain) && sc.chain.map((step: any, i: number) => (
               <div key={i} className="flex items-start gap-2">
                 <div className="flex flex-col items-center flex-shrink-0 mt-1">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border ${dirBg(step.direction)}`}>
@@ -1664,7 +1679,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1 mb-1.5">
-                  {sc.opportunity.stocks?.map((stock: string, i: number) => (
+                  {Array.isArray(sc.opportunity.stocks) && sc.opportunity.stocks.map((stock: string, i: number) => (
                     <span key={i} className="text-[10px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-medium">
                       {stock}
                     </span>
