@@ -104,6 +104,10 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
             CREATE INDEX IF NOT EXISTS idx_custom_active ON custom_sources(is_active);
         """)
+        # Clean up legacy chartlink entries
+        conn.execute("DELETE FROM custom_sources WHERE url LIKE '%chartlink%'")
+        conn.execute("DELETE FROM user_custom_searches WHERE query LIKE '%chartlink%'")
+        conn.execute("DELETE FROM geo_events WHERE data LIKE '%chartlink%'")
     print("[DB] Artillegence database initialised at", DB_PATH)
 
 

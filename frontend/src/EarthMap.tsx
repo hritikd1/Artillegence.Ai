@@ -163,6 +163,15 @@ function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: G
         };
     }, [map]);
 
+    // Reset idle whenever events change (e.g. category switch or new event)
+    useEffect(() => {
+        isIdle.current = false;
+        if (idleTimeout.current) clearTimeout(idleTimeout.current);
+        idleTimeout.current = setTimeout(() => {
+            isIdle.current = true;
+        }, 12000); // 12 seconds of quiet time after any event update
+    }, [events]);
+
     // Handle real-time new event arrival focus
     useEffect(() => {
         if (prevTotalCount.current > 0 && totalCount > prevTotalCount.current) {
@@ -249,6 +258,21 @@ function getLocationForKeyword(keyword: string): { lat: number; lng: number; cit
     return { lat: 19.0760, lng: 72.8777, city: 'Mumbai', country: 'India' };
 }
 
+function getEventCategory(e: GeoEvent): string {
+    const isCustom = e.isCustom 
+        || (e.id && (String(e.id).startsWith('custom-') || String(e.id).startsWith('websrc-') || String(e.id).startsWith('webscan-')))
+        || e.source === 'User Custom'
+        || e.source === 'Artillegence AI Custom Track'
+        || (e.source && String(e.source).startsWith('Web:'))
+        || (e as any).section === 'user_custom'
+        || (e as any).section === 'web_monitoring';
+
+    if (isCustom) {
+        return e.category && e.category.startsWith('⭐') ? e.category : '⭐ User Custom';
+    }
+    return e.category || 'Geopolitics & Telegram';
+}
+
 export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, selectedEvent }: EarthMapProps) {
     const markerRefs = useRef<{ [key: string]: L.Marker }>({});
     
@@ -291,13 +315,30 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const [customItems, setCustomItems] = useState<GeoEvent[]>(() => {
         try {
             const saved = localStorage.getItem('artillegence_custom_watchlist');
-            return saved ? JSON.parse(saved) : [];
+            if (saved) {
+                const parsed = JSON.parse(saved) as GeoEvent[];
+                const cleaned = parsed.filter(item => {
+                    const urlStr = String(item.url || '').toLowerCase();
+                    const headStr = String(item.headline || '').toLowerCase();
+                    const sumStr = String(item.summary || '').toLowerCase();
+                    return !urlStr.includes('chartlink') && !headStr.includes('chartlink') && !sumStr.includes('chartlink');
+                });
+                if (cleaned.length !== parsed.length) {
+                    localStorage.setItem('artillegence_custom_watchlist', JSON.stringify(cleaned));
+                }
+                return cleaned;
+            }
+            return [];
         } catch { return []; }
     });
 
     // Auto-rerun latest query on mount if it exists
     useEffect(() => {
         const lastQuery = localStorage.getItem('artillegence_last_custom_query');
+        if (lastQuery && lastQuery.toLowerCase().includes('chartlink')) {
+            localStorage.removeItem('artillegence_last_custom_query');
+            return;
+        }
         if (lastQuery && customItems.length === 0) {
             setCustomInput(lastQuery);
             setTimeout(() => {
@@ -305,7 +346,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                 if (btn) btn.click();
             }, 1000);
         }
-    }, []);
+    }, [customItems.length]);
 
     // Save custom items to localStorage
     useEffect(() => {
@@ -316,7 +357,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const allEvents = useMemo(() => [...events, ...customItems], [events, customItems]);
 
     const categories = useMemo(() => {
-        const cats = Array.from(new Set(allEvents.map(e => e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram'))));
+        const cats = Array.from(new Set(allEvents.map(e => getEventCategory(e))));
         return cats;
     }, [allEvents]);
 
@@ -339,7 +380,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const displayEvents = useMemo(() => {
         let evs = [...allEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (activeCategory) {
-            evs = evs.filter(e => (e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram')) === activeCategory);
+            evs = evs.filter(e => getEventCategory(e) === activeCategory);
         }
         if (timeFilter !== null && timeFilter < maxTime) {
             evs = evs.filter(ev => new Date(ev.timestamp).getTime() <= timeFilter);
@@ -364,7 +405,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     const handleCategoryClick = useCallback((category: string | null) => {
         setActiveCategory(category);
         const targetEvents = category
-            ? allEvents.filter(e => (e.category || (e.isCustom ? '⭐ User Custom' : 'Geopolitics & Telegram')) === category)
+            ? allEvents.filter(e => getEventCategory(e) === category)
             : allEvents;
         if (targetEvents.length > 0) {
             const newest = [...targetEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
@@ -540,6 +581,19 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
         return '#10b981';
     }, [displayEvents]);
 
+    const filteredGeoJson = useMemo(() => {
+        if (!geoJsonData || !geoJsonData.features) return null;
+        return {
+            ...geoJsonData,
+            features: geoJsonData.features.filter((feature: any) => {
+                const properties = feature?.properties || {};
+                const countryName = properties.ADMIN || properties.name || properties.Name || '';
+                const countryCode = properties.ISO_A3 || properties.iso_a3 || properties['ISO3166-1-Alpha-3'] || properties['ISO3166-1-Alpha-2'] || properties.code || '';
+                return getCountryColor(countryName, countryCode) !== null;
+            })
+        };
+    }, [geoJsonData, displayEvents, getCountryColor]);
+
     return (
         <div className="relative w-full rounded-lg overflow-hidden border border-slate-800/80 shadow-2xl" style={{ height: '500px' }}>
             <MapContainer
@@ -556,10 +610,10 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                     maxZoom={18}
                 />
 
-                {geoJsonData && (
+                {filteredGeoJson && filteredGeoJson.features.length > 0 && (
                     <GeoJSON
                         key={displayEvents.map(e => e.id + '-' + e.severity).join('_')}
-                        data={geoJsonData}
+                        data={filteredGeoJson}
                         style={(feature) => {
                             const properties = feature?.properties || {};
                             const countryName = properties.ADMIN || properties.name || properties.Name || '';

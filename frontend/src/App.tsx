@@ -3,7 +3,8 @@ import {
   Activity, Radio, Cpu, Satellite, TrendingUp, Search,
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
   RefreshCw, Clock, Globe, AlertTriangle,
-  DollarSign, Newspaper, Zap, Target, ArrowRight, Shield, X
+  DollarSign, Newspaper, Zap, Target, ArrowRight, Shield, X,
+  Calendar
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
@@ -746,11 +747,13 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
 
 function App() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'monitor'>('news');
+  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'monitor'>('news');
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
   const [geoEvents, setGeoEvents] = useState<GeoEvent[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
   const [telegramData, setTelegramData] = useState<LiveEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<GeoEvent | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<{ [key: string]: { loading: boolean, text: string | null } }>({});
@@ -917,6 +920,27 @@ function App() {
     poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
   }, [authChecked]);
 
+  useEffect(() => {
+    if (!authChecked) return;
+    const fetchCalendar = async () => {
+      setCalendarLoading(true);
+      try {
+        const data = await apiGet<any>('/api/economic-calendar');
+        if (data && Array.isArray(data.events)) {
+          setCalendarEvents(data.events);
+        }
+      } catch (err) {
+        console.error("Failed to load calendar events", err);
+      } finally {
+        setCalendarLoading(false);
+      }
+    };
+    
+    if (activeTab === 'calendar') {
+      fetchCalendar();
+    }
+  }, [activeTab, authChecked]);
+
   // Fetch Scenario Intelligence data
   useEffect(() => {
     if (!authChecked) return;
@@ -1057,6 +1081,12 @@ function App() {
           CHARTS
         </button>
         <button
+          onClick={() => setActiveTab('calendar')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'calendar' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+        >
+          CALENDAR
+        </button>
+        <button
           onClick={() => setActiveTab('monitor')}
           className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'monitor' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
         >
@@ -1173,6 +1203,12 @@ function App() {
           </div>
         </Suspense>
       </ErrorBoundary>
+
+      {activeTab === 'calendar' && (
+        <div className="animate-fade-in">
+          <EconomicCalendarView events={calendarEvents} loading={calendarLoading} />
+        </div>
+      )}
 
       {activeTab === 'monitor' && (
         <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px] animate-fade-in border-dashed border-2 border-slate-700/50">
@@ -1778,3 +1814,264 @@ function TradingViewTickerTape() {
 /* TradingViewHotlists removed — Stocks Today section eliminated from dashboard */
 
 export default App
+
+// ==========================================
+// Economic Calendar Component
+// ==========================================
+
+export function EconomicCalendarView({ events, loading }: { events: any[]; loading: boolean }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
+
+  const filteredEvents = useMemo(() => {
+    return events.filter(ev => {
+      // 1. Search term match
+      const symbol = String(ev.symbol || '').toLowerCase();
+      const company = String(ev.company || '').toLowerCase();
+      const details = String(ev.details || '').toLowerCase();
+      const matchesSearch = symbol.includes(searchTerm.toLowerCase()) || 
+                            company.includes(searchTerm.toLowerCase()) ||
+                            details.includes(searchTerm.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      // 2. Type match
+      if (typeFilter !== 'All') {
+        if (typeFilter === 'Dividends' && ev.event_type !== 'Dividend') return false;
+        if (typeFilter === 'Splits' && ev.event_type !== 'Stock Split' && ev.event_type !== 'Bonus') return false;
+        if (typeFilter === 'Earnings' && ev.event_type !== 'Financial Results') return false;
+        if (typeFilter === 'Board Meetings' && ev.event_type !== 'Board Meeting' && ev.event_type !== 'Fund Raising') return false;
+      }
+
+      // 3. Time match
+      const evDate = new Date(ev.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const oneWeek = new Date(today);
+      oneWeek.setDate(oneWeek.getDate() + 7);
+
+      const evTime = evDate.getTime();
+      const todayTime = today.getTime();
+      const tomorrowTime = tomorrow.getTime();
+      const oneWeekTime = oneWeek.getTime();
+
+      if (timeFilter === 'today') {
+        return evTime === todayTime;
+      } else if (timeFilter === 'tomorrow') {
+        return evTime === tomorrowTime;
+      } else if (timeFilter === 'week') {
+        return evTime >= todayTime && evTime <= oneWeekTime;
+      }
+
+      return true;
+    });
+  }, [events, searchTerm, typeFilter, timeFilter]);
+
+  const getBadgeStyle = (type: string) => {
+    switch (type) {
+      case 'Dividend':
+        return 'bg-emerald-950/60 border-emerald-800 text-emerald-400';
+      case 'Stock Split':
+      case 'Bonus':
+        return 'bg-purple-950/60 border-purple-800 text-purple-400';
+      case 'Financial Results':
+        return 'bg-sky-950/60 border-sky-800 text-sky-400';
+      case 'Fund Raising':
+        return 'bg-teal-950/60 border-teal-800 text-teal-400';
+      case 'Board Meeting':
+        return 'bg-slate-900 border-slate-700 text-slate-300';
+      default:
+        return 'bg-amber-950/60 border-amber-800 text-amber-400';
+    }
+  };
+
+  const getEventIcon = (type: string) => {
+    switch (type) {
+      case 'Dividend':
+        return <DollarSign size={13} className="text-emerald-400" />;
+      case 'Stock Split':
+      case 'Bonus':
+        return <Cpu size={13} className="text-purple-400" />;
+      case 'Financial Results':
+        return <TrendingUp size={13} className="text-sky-400" />;
+      default:
+        return <Activity size={13} className="text-slate-400" />;
+    }
+  };
+
+  return (
+    <div className="glass-panel p-6 animate-fade-in text-left border border-slate-800/80 bg-slate-950/40 shadow-xl rounded-xl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-800/60">
+        <div>
+          <div className="flex items-center gap-2 text-sky-400 mb-1">
+            <Calendar size={18} className="animate-pulse" />
+            <h2 className="text-base font-black tracking-widest uppercase text-white">NSE Corporate & Economic Calendar</h2>
+          </div>
+          <p className="text-[10px] text-slate-500 font-medium">Verified corporate actions, financial results, dividends, and splits scheduled for Indian equities.</p>
+        </div>
+        
+        {/* Statistics or Status */}
+        <div className="bg-slate-900/60 border border-slate-800 rounded px-3 py-1.5 flex items-center gap-4 text-[9px] font-bold text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>{filteredEvents.length} UPCOMING EVENTS</span>
+          </div>
+          {loading && (
+            <div className="flex items-center gap-1">
+              <RefreshCw size={10} className="animate-spin text-sky-400" />
+              <span className="text-sky-400">SYNCING NSE...</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filters & Search Row */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
+        <div className="md:col-span-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" size={14} />
+          <input
+            type="text"
+            placeholder="Search symbol, company, or purpose..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-900/60 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50 transition-colors"
+          />
+        </div>
+
+        {/* Event Type Filter */}
+        <div className="md:col-span-4 flex items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase whitespace-nowrap">Event Type:</span>
+          <div className="flex-1 flex gap-1 bg-slate-900/40 p-1 rounded-lg border border-slate-800/60">
+            {['All', 'Dividends', 'Splits', 'Earnings', 'Board Meetings'].map(t => (
+              <button
+                key={t}
+                onClick={() => setTypeFilter(t)}
+                className={`flex-1 text-[9px] font-bold py-1 px-1.5 rounded transition-all truncate text-center ${
+                  typeFilter === t
+                    ? 'bg-sky-600/25 text-sky-400 border border-sky-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Date Filter */}
+        <div className="md:col-span-4 flex items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase whitespace-nowrap">Timeframe:</span>
+          <div className="flex-1 flex gap-1 bg-slate-900/40 p-1 rounded-lg border border-slate-800/60">
+            {[
+              { id: 'all', label: 'ALL' },
+              { id: 'today', label: 'TODAY' },
+              { id: 'tomorrow', label: 'TOMORROW' },
+              { id: 'week', label: '7 DAYS' }
+            ].map(tf => (
+              <button
+                key={tf.id}
+                onClick={() => setTimeFilter(tf.id as any)}
+                className={`flex-1 text-[9px] font-bold py-1 px-1.5 rounded transition-all text-center ${
+                  timeFilter === tf.id
+                    ? 'bg-sky-600/25 text-sky-400 border border-sky-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Events Display */}
+      {loading && filteredEvents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-slate-900/10 rounded-xl border border-slate-900/60">
+          <div className="animate-spin w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full mb-4"></div>
+          <span className="text-xs text-sky-400 font-bold tracking-widest animate-pulse">LOADING REAL-TIME NSE CALENDAR...</span>
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-slate-900/10 rounded-xl border border-slate-900/60 text-center text-slate-500">
+          <AlertTriangle className="text-slate-600 mb-3" size={32} />
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">No scheduled events found</h3>
+          <p className="text-[10px] text-slate-500 mt-1 max-w-[280px]">Try adjusting your search terms or expanding the date range filter.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/20 max-h-[500px] overflow-y-auto scrollbar-thin">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] font-black tracking-widest text-slate-400 uppercase font-bold">
+                <th className="py-3 px-4">Date</th>
+                <th className="py-3 px-4">Symbol</th>
+                <th className="py-3 px-4">Company</th>
+                <th className="py-3 px-4 text-center">Type</th>
+                <th className="py-3 px-4">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/40 text-[11px] text-slate-300 font-medium">
+              {filteredEvents.map((ev, i) => {
+                const dateObj = new Date(ev.date);
+                const dayStr = dateObj.toLocaleDateString('en-IN', { weekday: 'short' });
+                const dateStr = dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                
+                return (
+                  <tr key={i} className="hover:bg-slate-900/30 transition-colors">
+                    {/* Date badge */}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-sky-400 bg-sky-950/40 border border-sky-800/30 px-1.5 py-0.5 rounded uppercase font-mono">
+                          {dayStr}
+                        </span>
+                        <span className="font-semibold text-white font-mono">{dateStr}</span>
+                      </div>
+                    </td>
+                    
+                    {/* Ticker Symbol */}
+                    <td className="py-3 px-4 font-mono font-bold">
+                      <button 
+                        onClick={() => {
+                          if ((window as any).triggerTacticalAdvice) {
+                            (window as any).triggerTacticalAdvice(
+                              `${ev.symbol} Stock Action`, 
+                              `Corporate action event: ${ev.event_type} (${ev.details}) scheduled for ${ev.company} on ${ev.date}.`
+                            );
+                          }
+                        }}
+                        className="text-sky-400 hover:text-sky-300 hover:underline text-left cursor-pointer uppercase tracking-wide bg-slate-900/60 px-2 py-1 rounded border border-slate-800"
+                      >
+                        NSE:{ev.symbol}
+                      </button>
+                    </td>
+                    
+                    {/* Company name */}
+                    <td className="py-3 px-4 max-w-[200px] truncate text-white/95 font-semibold">
+                      {ev.company}
+                    </td>
+                    
+                    {/* Custom type badge */}
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${getBadgeStyle(ev.event_type)}`}>
+                        {getEventIcon(ev.event_type)}
+                        {ev.event_type}
+                      </span>
+                    </td>
+                    
+                    {/* Details explanation */}
+                    <td className="py-3 px-4 text-slate-400 leading-relaxed font-semibold max-w-[300px] truncate" title={ev.details}>
+                      {ev.details}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

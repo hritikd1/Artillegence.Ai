@@ -209,6 +209,133 @@ async def website_scanner_cycle():
         print(f"   [WEBSITE SCANNER] Error: {e}")
 
 # 
+# AGENT 12: Economic Calendar Monitor (fetches NSE events & corporate actions)
+# 
+async def economic_calendar_cycle():
+    print("\n [ECONOMIC CALENDAR] Fetching upcoming corporate actions and event calendar from NSE...")
+    try:
+        from datetime import datetime, timedelta
+        from nselib import capital_market
+        import pandas as pd
+        
+        now = datetime.now()
+        # Fetch for the next 14 days
+        from_date = now.strftime('%d-%m-%Y')
+        to_date = (now + timedelta(days=14)).strftime('%d-%m-%Y')
+        
+        events = []
+        
+        # 1. Fetch Corporate Actions
+        try:
+            df_actions = capital_market.corporate_actions_for_equity(from_date=from_date, to_date=to_date)
+            if isinstance(df_actions, pd.DataFrame) and not df_actions.empty:
+                for _, row in df_actions.iterrows():
+                    ex_date_str = str(row.get('exDate', '')).strip()
+                    if not ex_date_str or ex_date_str == '-':
+                        continue
+                    try:
+                        dt = datetime.strptime(ex_date_str, '%d-%b-%Y')
+                        iso_date = dt.strftime('%Y-%m-%d')
+                    except Exception:
+                        iso_date = ex_date_str
+                        
+                    subject = str(row.get('subject', '')).strip()
+                    sub_lower = subject.lower()
+                    
+                    if 'dividend' in sub_lower:
+                        etype = 'Dividend'
+                    elif 'split' in sub_lower or 'sub-division' in sub_lower:
+                        etype = 'Stock Split'
+                    elif 'bonus' in sub_lower:
+                        etype = 'Bonus'
+                    elif 'buy back' in sub_lower or 'buyback' in sub_lower:
+                        etype = 'Buyback'
+                    elif 'right' in sub_lower:
+                        etype = 'Rights Issue'
+                    else:
+                        etype = 'Corporate Action'
+                        
+                    events.append({
+                        "date": iso_date,
+                        "symbol": str(row.get('symbol', '')).strip(),
+                        "company": str(row.get('comp', '')).strip(),
+                        "event_type": etype,
+                        "details": subject,
+                        "source": "NSE"
+                    })
+        except Exception as e_actions:
+            print(f"   [ECONOMIC CALENDAR] Actions fetch failed: {e_actions}")
+            
+        # 2. Fetch Event Calendar
+        try:
+            df_calendar = capital_market.event_calendar_for_equity(from_date=from_date, to_date=to_date)
+            if isinstance(df_calendar, pd.DataFrame) and not df_calendar.empty:
+                for _, row in df_calendar.iterrows():
+                    date_str = str(row.get('date', '')).strip()
+                    if not date_str or date_str == '-':
+                        continue
+                    try:
+                        dt = datetime.strptime(date_str, '%d-%b-%Y')
+                        iso_date = dt.strftime('%Y-%m-%d')
+                    except Exception:
+                        iso_date = date_str
+                        
+                    purpose = str(row.get('purpose', '')).strip()
+                    bm_desc = str(row.get('bm_desc', '')).strip()
+                    
+                    desc = bm_desc if bm_desc and bm_desc != '-' else purpose
+                    purp_lower = purpose.lower()
+                    desc_lower = desc.lower()
+                    
+                    if 'results' in purp_lower or 'financial results' in purp_lower:
+                        etype = 'Financial Results'
+                    elif 'dividend' in purp_lower or 'dividend' in desc_lower:
+                        etype = 'Dividend'
+                    elif 'split' in purp_lower or 'split' in desc_lower:
+                        etype = 'Stock Split'
+                    elif 'bonus' in purp_lower or 'bonus' in desc_lower:
+                        etype = 'Bonus'
+                    elif 'fund raising' in purp_lower or 'fund' in desc_lower:
+                        etype = 'Fund Raising'
+                    else:
+                        etype = 'Board Meeting'
+                        
+                    events.append({
+                        "date": iso_date,
+                        "symbol": str(row.get('symbol', '')).strip(),
+                        "company": str(row.get('company', '')).strip(),
+                        "event_type": etype,
+                        "details": desc,
+                        "source": "NSE"
+                    })
+        except Exception as e_cal:
+            print(f"   [ECONOMIC CALENDAR] Calendar fetch failed: {e_cal}")
+            
+        # Sort and deduplicate
+        seen = set()
+        deduped = []
+        for ev in events:
+            key = (ev["date"], ev["symbol"], ev["event_type"], ev["details"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(ev)
+                
+        deduped.sort(key=lambda x: x["date"])
+        
+        if deduped:
+            cache = {
+                "events": deduped,
+                "updated_at": now.isoformat()
+            }
+            db.save_intelligence("economic_calendar", cache)
+            print(f"   [ECONOMIC CALENDAR] Successfully saved {len(deduped)} events to DB.")
+        else:
+            print("   [ECONOMIC CALENDAR] Scrape returned 0 events; retaining existing database cache.")
+    except Exception as e:
+        print(f"   [ECONOMIC CALENDAR] Cycle Error: {e}")
+
+
+# 
 # Generic helper to post to internal API.
 # 
 async def post_to_api(endpoint: str, payload: dict):
@@ -1420,7 +1547,9 @@ agent_status = {
     "custom_monitor":         {"status": "idle", "last_run": None, "cycle_count": 0},
     "website_scanner":        {"status": "idle", "last_run": None, "cycle_count": 0},
     "scenario_intelligence":  {"status": "idle", "last_run": None, "cycle_count": 0},
+    "economic_calendar":      {"status": "idle", "last_run": None, "cycle_count": 0},
 }
+
 
 def get_agent_status():
     return agent_status
@@ -1459,4 +1588,5 @@ async def start_all_agents():
         run_agent_loop("custom_monitor",          custom_intelligence_monitor_cycle, interval_min=60),
         run_agent_loop("website_scanner",         website_scanner_cycle,         interval_min=60),
         run_agent_loop("scenario_intelligence",   scenario_intelligence_cycle,   interval_min=15),
+        run_agent_loop("economic_calendar",      economic_calendar_cycle,       interval_min=120),
     )
