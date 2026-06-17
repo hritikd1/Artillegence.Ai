@@ -29,6 +29,67 @@ export function TelegramEmbed({ channelSlug, postId, compact }: { channelSlug: s
     );
 }
 
+function TelegramPostCard({ post }: { post: any }) {
+    const [showEmbed, setShowEmbed] = useState(false);
+    const slug = typeof post.source === 'string' ? post.source.replace('Telegram: ', '') : 'CIG_telegram';
+    
+    return (
+        <div className="p-3 bg-slate-900/40 border border-slate-800/80 rounded-lg animate-fade-in space-y-2 text-left">
+            <div className="flex items-center justify-between">
+                <span className="text-[9px] font-bold text-sky-400 bg-sky-950/40 border border-sky-800/30 px-1.5 py-0.5 rounded uppercase font-mono">
+                    @{slug}
+                </span>
+                <span className="text-[8px] text-slate-500">{new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            
+            {post.title && (
+                <h4 className="text-[11px] font-bold text-white leading-tight">{post.title}</h4>
+            )}
+            
+            {post.snippet && (
+                <p className="text-[10px] text-slate-300 leading-relaxed whitespace-pre-wrap">{post.snippet}</p>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+                <button 
+                    onClick={() => (window as any).triggerTacticalAdvice(post.title || `Telegram update from @${slug}`, post.snippet || '')}
+                    className="text-[9px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-0.5 transition-colors uppercase tracking-tight"
+                >
+                    ✨ Analyze Impact
+                </button>
+
+                <div className="flex items-center gap-2">
+                    {post.telegram_post_id && (
+                        <button
+                            onClick={() => setShowEmbed(!showEmbed)}
+                            className="text-[9px] font-bold text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-tight"
+                        >
+                            {showEmbed ? 'Hide Native' : 'Show Native'}
+                        </button>
+                    )}
+                    <a 
+                        href={post.url || `https://t.me/${slug}/${post.telegram_post_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[9px] font-bold text-slate-400 hover:text-slate-200 flex items-center gap-0.5 transition-colors uppercase tracking-tight"
+                    >
+                        <ExternalLink size={10} /> Open
+                    </a>
+                </div>
+            </div>
+
+            {showEmbed && post.telegram_post_id && (
+                <div className="mt-2 pt-2 border-t border-slate-800/60">
+                    <TelegramEmbed channelSlug={slug} postId={post.telegram_post_id} compact={true} />
+                    <p className="text-[8px] text-slate-500 mt-1 italic text-center">
+                        Note: Embed requires direct connection to t.me
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* Telegram Feed Section */
 export default function TelegramFeed({ data }: { data?: any }) {
     const newsItems = data?.news_items || [];
@@ -118,7 +179,7 @@ export default function TelegramFeed({ data }: { data?: any }) {
                     validPosts.map((post: any, i: number) => {
                         if (post.agent === 'website_scanner') {
                             return (
-                                <div key={`ws-${i}`} className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-lg animate-fade-in">
+                                <div key={`ws-${i}`} className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-lg animate-fade-in text-left">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Web Monitoring Update</span>
                                         <span className="text-[8px] text-slate-500">{new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -135,16 +196,7 @@ export default function TelegramFeed({ data }: { data?: any }) {
                             );
                         }
                         
-                        const slug = typeof post.source === 'string' ? post.source.replace('Telegram: ', '') : 'CIG_telegram';
-                        return (
-                            <div key={i} className="animate-fade-in">
-                                <div className="flex items-center justify-between mb-1 px-1">
-                                    <span className="text-[9px] font-bold text-slate-500 tracking-tighter uppercase">{slug}</span>
-                                    <span className="text-[8px] text-slate-600">{new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                </div>
-                                <TelegramEmbed channelSlug={slug} postId={post.telegram_post_id} compact={true} />
-                            </div>
-                        );
+                        return <TelegramPostCard key={i} post={post} />;
                     })
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full opacity-40">
