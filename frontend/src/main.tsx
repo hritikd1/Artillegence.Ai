@@ -37,7 +37,14 @@ class GlobalErrorBoundary extends Component<Props, State> {
 
   handleGlobalError = (event: ErrorEvent) => {
     const message = event.message || '';
-    if (message.includes('[tv]') || message.includes('tradingview') || message.includes('TradingView') || message.includes('Permission denied')) {
+    if (
+      message.includes('[tv]') || 
+      message.includes('tradingview') || 
+      message.includes('TradingView') || 
+      message.includes('Permission denied') ||
+      message === 'Script error.' ||
+      message.toLowerCase().includes('script error')
+    ) {
       console.warn("Ignored global error from TradingView / cross-origin script:", event);
       return;
     }
@@ -46,7 +53,14 @@ class GlobalErrorBoundary extends Component<Props, State> {
 
   handlePromiseRejection = (event: PromiseRejectionEvent) => {
     const reasonStr = String(event.reason || '');
-    if (reasonStr.includes('[tv]') || reasonStr.includes('tradingview') || reasonStr.includes('TradingView') || reasonStr.includes('Permission denied')) {
+    if (
+      reasonStr.includes('[tv]') || 
+      reasonStr.includes('tradingview') || 
+      reasonStr.includes('TradingView') || 
+      reasonStr.includes('Permission denied') ||
+      reasonStr === 'Script error.' ||
+      reasonStr.toLowerCase().includes('script error')
+    ) {
       console.warn("Ignored promise rejection from TradingView / browser settings:", event.reason);
       return;
     }
