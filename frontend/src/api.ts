@@ -34,8 +34,10 @@ export async function apiFetch<T = unknown>(
   // Individual components (like App.tsx) will handle the redirect if needed.
   if (response.status === 401) {
     localStorage.removeItem('token');
-    // We explicitly avoid window.location.replace here so that the Landing Page
-    // can mount ParticleGlobe even if the existing token is invalid.
+    // If the session expires on an authenticated page (e.g. /dashboard), redirect to login
+    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
     throw new Error('Unauthorized');
   }
 
