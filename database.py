@@ -99,10 +99,22 @@ def init_db():
                 is_active   INTEGER DEFAULT 1
             );
 
+            CREATE TABLE IF NOT EXISTS stock_research (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                status      TEXT NOT NULL,
+                logs        TEXT NOT NULL,
+                screenshots TEXT NOT NULL,
+                report      TEXT,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent);
             CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
             CREATE INDEX IF NOT EXISTS idx_custom_active ON custom_sources(is_active);
+            CREATE INDEX IF NOT EXISTS idx_research_symbol ON stock_research(symbol);
         """)
         # Clean up legacy chartlink entries
         conn.execute("DELETE FROM custom_sources WHERE url LIKE '%chartlink%'")
@@ -353,6 +365,67 @@ def mark_custom_search_run(query: str):
     """Update the last_run timestamp for a custom search."""
     with get_conn() as conn:
         conn.execute("UPDATE user_custom_searches SET last_run = ? WHERE query = ?", (datetime.now().isoformat(), query))
+
+
+#  Stock Research CRUD Operations 
+
+def create_research_session(symbol: str) -> int:
+    """Create a new pending research session and return its database ID."""
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """INSERT INTO stock_research(symbol, status, logs, screenshots, report, created_at, updated_at)
+               VALUES(?, 'pending', '[]', '[]', NULL, ?, ?)""",
+            (symbol.upper().strip(), now, now)
+        )
+        return cursor.lastrowid
+
+def update_research_session(session_id: int, status: str, logs: list, screenshots: list, report: Optional[dict] = None):
+    """Update the status, logs, screenshots list, and final report of a research session."""
+    now = datetime.now().isoformat()
+    logs_json = json.dumps(logs)
+    screenshots_json = json.dumps(screenshots)
+    report_json = json.dumps(report) if report else None
+    
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE stock_research
+               SET status = ?, logs = ?, screenshots = ?, report = ?, updated_at = ?
+               WHERE id = ?""",
+            (status, logs_json, screenshots_json, report_json, now, session_id)
+        )
+
+def get_research_session(session_id: int) -> Optional[dict]:
+    """Retrieve details of a single research session."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM stock_research WHERE id = ?", (session_id,)).fetchone()
+    if row:
+        d = dict(row)
+        try:
+            d["logs"] = json.loads(d["logs"])
+        except Exception:
+            d["logs"] = []
+        try:
+            d["screenshots"] = json.loads(d["screenshots"])
+        except Exception:
+            d["screenshots"] = []
+        try:
+            d["report"] = json.loads(d["report"]) if d["report"] else None
+        except Exception:
+            d["report"] = None
+        return d
+    return None
+
+def get_all_research_sessions() -> list:
+    """Retrieve summaries of all past research sessions, ordered newest-first."""
+    with get_conn() as conn:
+        # We fetch only metadata and final report summary for the list view (exclude large screenshots)
+        cur = conn.execute(
+            """SELECT id, symbol, status, created_at, updated_at
+               FROM stock_research
+               ORDER BY id DESC"""
+        )
+        return [dict(row) for row in cur.fetchall()]
 
 
 #  Bootstrap on import 

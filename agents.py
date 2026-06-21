@@ -524,10 +524,23 @@ async def news_scanner_cycle():
     gn_rss.feed_url = "https://globalnews.ca/world/feed/"
     gn_articles_extra = await gn_rss.fetch_data(limit=5, hours=8)
 
+    # NEW: Reputable business/financial news sources with images
+    cnbc_rss = GoogleRSSFeed("CNBC", "rss", "business", country="US")
+    cnbc_rss.feed_url = "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=finance"
+    cnbc_articles = await cnbc_rss.fetch_data(limit=5, hours=8)
+
+    mc_rss = GoogleRSSFeed("Moneycontrol", "rss", "stocks", country="IN")
+    mc_rss.feed_url = "https://www.moneycontrol.com/rss/MCtopnews.xml"
+    mc_articles = await mc_rss.fetch_data(limit=5, hours=8)
+
+    et_rss = GoogleRSSFeed("Economic Times", "rss", "market", country="IN")
+    et_rss.feed_url = "https://economictimes.indiatimes.com/rssfeedstopstories.cms"
+    et_articles = await et_rss.fetch_data(limit=5, hours=8)
+
     # Google News specific top stories
     gn_top = await fetch_google_news_topics(["top_stories", "india", "business"], limit=10, hours=8)
     
-    all_articles = bing_articles + gn_articles + aj_articles + gn_articles_extra + gn_top
+    all_articles = bing_articles + gn_articles + aj_articles + gn_articles_extra + cnbc_articles + mc_articles + et_articles + gn_top
     unique = deduplicate(all_articles)[:40]
 
     if not unique:
@@ -550,14 +563,26 @@ IMPORTANT: Only reference information from these headlines. Do not use your trai
 
     summary = await call_mistral(prompt)
 
-    news_items = [{
-        "title": a['title'],
-        "source": a.get('source', 'Google News'),
-        "url": a.get('link', ''),
-        "snippet": a.get('snippet', '')[:120],
-        "image": a.get('image', ''),
-        "timestamp": a.get('timestamp', datetime.now().isoformat())
-    } for a in unique[:15]]
+    from core_scrapers import WebScraper
+    
+    # Fetch visuals concurrently for the top 15 news items
+    tasks = [WebScraper.extract_visuals_from_url(a.get('link', '')) for a in unique[:15]]
+    visuals_list = await asyncio.gather(*tasks)
+
+    news_items = []
+    for i, a in enumerate(unique[:15]):
+        visuals = visuals_list[i]
+        img = visuals.get("image") or a.get("image") or ""
+        vid = visuals.get("video") or ""
+        news_items.append({
+            "title": a['title'],
+            "source": a.get('source', 'Google News'),
+            "url": a.get('link', ''),
+            "snippet": a.get('snippet', '')[:120],
+            "image": img,
+            "video": vid,
+            "timestamp": a.get('timestamp', datetime.now().isoformat())
+        })
 
     payload = {
         "agent": "news_scanner",

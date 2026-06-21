@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, GeoJSON } fro
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, ExternalLink, Clock, Plus, X, Search, Star } from 'lucide-react';
-import { TelegramEmbed } from './TelegramFeed';
+import { TelegramEmbed, renderNewsVideo } from './TelegramFeed';
 import { apiPost } from './api';
 
 // Fix Leaflet's default icon path issues in React
@@ -102,6 +102,8 @@ interface GeoEvent {
     category?: string;
     image_base64?: string;
     isCustom?: boolean;
+    image?: string;
+    video?: string;
 }
 
 interface EarthMapProps {
@@ -738,9 +740,21 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                             ) : (
                                                 <>
                                                     <h4 className="text-xs font-bold text-white leading-tight mb-2 pb-1 border-b border-slate-700/50">{ev.headline}</h4>
-                                                    <p className="text-[10px] text-slate-300 leading-relaxed">
+                                                    <p className="text-[10px] text-slate-300 leading-relaxed mb-1">
                                                         {ev.summary}
                                                     </p>
+                                                    {ev.video ? (
+                                                        renderNewsVideo(ev.video)
+                                                    ) : ev.image ? (
+                                                        <div className="mt-2 rounded overflow-hidden max-h-32 bg-slate-950/80 flex items-center justify-center border border-slate-750/40">
+                                                            <img 
+                                                                src={ev.image} 
+                                                                alt="" 
+                                                                className="max-h-32 object-cover w-full" 
+                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
+                                                            />
+                                                        </div>
+                                                    ) : null}
                                                 </>
                                             )}
                                         </>

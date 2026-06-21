@@ -204,6 +204,7 @@ def extract_geo_events(event: dict):
         news_items = event.get('sources', [])
 
     import random
+    import hashlib
     for item in news_items:
         text = (item.get('title', '') + ' ' + item.get('snippet', '') + ' ' + str(item.get('url', ''))).lower()
         if not text: continue
@@ -223,23 +224,41 @@ def extract_geo_events(event: dict):
                 break
                 
         if not mapped_lat:
-            if category == 'Indian Markets':
-                mapped_lat, mapped_lng, mapped_city = GLOBAL_LOCATIONS['mumbai']['lat'], GLOBAL_LOCATIONS['mumbai']['lng'], GLOBAL_LOCATIONS['mumbai']['city']
-            elif agent_type == 'visual_researcher':
+            if agent_type == 'visual_researcher':
                 mapped_lat, mapped_lng, mapped_city = GLOBAL_LOCATIONS['us']['lat'], GLOBAL_LOCATIONS['us']['lng'], GLOBAL_LOCATIONS['us']['city']
+            else:
+                source_lower = str(item.get('source', '')).lower()
+                if any(s in source_lower for s in ['moneycontrol', 'economic times', 'times of india', 'ndtv', 'indian express', 'livemint', 'financial express']):
+                    mapped_lat, mapped_lng, mapped_city = 19.076, 72.8777, "Mumbai"
+                    if category == 'Global Macro':
+                        category = 'Indian Markets'
+                elif any(s in source_lower for s in ['cnbc', 'bloomberg', 'reuters', 'wsj', 'wall street', 'marketwatch', 'cnn', 'yahoo']):
+                    mapped_lat, mapped_lng, mapped_city = 40.7069, -74.0089, "New York"
+                elif any(s in source_lower for s in ['al jazeera', 'aljazeera', 'bbc', 'global news', 'guardian']):
+                    mapped_lat, mapped_lng, mapped_city = 25.2854, 51.5310, "Doha"
+                else:
+                    mapped_lat, mapped_lng, mapped_city = 19.076, 72.8777, "Mumbai"
 
         if mapped_lat:
+            item_url = item.get('url', '')
+            item_title = item.get('title', '')
+            unique_string = item_url if item_url else item_title
+            hashed_id = hashlib.md5(unique_string.encode('utf-8')).hexdigest()[:12]
+            event_id = f"news-{hashed_id}"
+
             found.append({
-                'id': f"news-{uuid.uuid4().hex[:6]}",
+                'id': event_id,
                 'lat': mapped_lat + (random.uniform(-1, 1) if mapped_city == 'India' or mapped_city == 'USA' else random.uniform(-0.1, 0.1)),
                 'lng': mapped_lng + (random.uniform(-1, 1) if mapped_city == 'India' or mapped_city == 'USA' else random.uniform(-0.1, 0.1)),
                 'city': mapped_city,
                 'country': '',
-                'headline': item.get('title', ''),
+                'headline': item_title,
                 'summary': item.get('snippet', ''),
                 'source': item.get('source', 'Autonomous Agent'),
-                'url': item.get('url', ''),
+                'url': item_url,
                 'image_base64': item.get('image_base64', ''),
+                'image': item.get('image', ''),
+                'video': item.get('video', ''),
                 'severity': severity,
                 'category': category,
                 'timestamp': item.get('timestamp') or datetime.now().isoformat()
@@ -532,11 +551,100 @@ async def chat_endpoint(request: ChatRequest, _user=Depends(require_auth)):
 async def get_status():
     return {"status": "online", "system": "Artillegence AI"}
 
+def calculate_atr_trail(df, period=10, multiplier=2.0):
+    import pandas as pd
+    import numpy as np
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.ewm(alpha=1.0/period, adjust=False).mean()
+    nLoss = multiplier * atr
+    trail = np.zeros(len(df))
+    bull = np.ones(len(df), dtype=bool)
+    trail[0] = close.iloc[0] - nLoss.iloc[0]
+    bull[0] = True
+    for i in range(1, len(df)):
+        current_close = close.iloc[i]
+        current_nLoss = nLoss.iloc[i]
+        prev_trail = trail[i-1]
+        prev_bull = bull[i-1]
+        if prev_bull:
+            if current_close > prev_trail:
+                trail[i] = max(prev_trail, current_close - current_nLoss)
+                bull[i] = True
+            else:
+                trail[i] = current_close + current_nLoss
+                bull[i] = False
+        else:
+            if current_close < prev_trail:
+                trail[i] = min(prev_trail, current_close + current_nLoss)
+                bull[i] = False
+            else:
+                trail[i] = current_close - current_nLoss
+                bull[i] = True
+    return pd.DataFrame({'trail': trail, 'bull': bull}, index=df.index)
+
+def calculate_supertrend(df, period=10, multiplier=1.7):
+    import pandas as pd
+    import numpy as np
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.ewm(alpha=1.0/period, adjust=False).mean()
+    hl2 = (high + low) / 2
+    basic_ub = hl2 + multiplier * atr
+    basic_lb = hl2 - multiplier * atr
+    final_ub = np.zeros(len(df))
+    final_lb = np.zeros(len(df))
+    supertrend = np.zeros(len(df))
+    direction = np.ones(len(df))
+    for i in range(len(df)):
+        if i == 0:
+            final_ub[i] = basic_ub.iloc[i]
+            final_lb[i] = basic_lb.iloc[i]
+            supertrend[i] = basic_ub.iloc[i]
+            direction[i] = -1
+            continue
+        if basic_ub.iloc[i] < final_ub[i-1] or close.iloc[i-1] > final_ub[i-1]:
+            final_ub[i] = basic_ub.iloc[i]
+        else:
+            final_ub[i] = final_ub[i-1]
+        if basic_lb.iloc[i] > final_lb[i-1] or close.iloc[i-1] < final_lb[i-1]:
+            final_lb[i] = basic_lb.iloc[i]
+        else:
+            final_lb[i] = final_lb[i-1]
+        if supertrend[i-1] == final_ub[i-1]:
+            if close.iloc[i] <= final_ub[i]:
+                supertrend[i] = final_ub[i]
+                direction[i] = -1
+            else:
+                supertrend[i] = final_lb[i]
+                direction[i] = 1
+        else:
+            if close.iloc[i] >= final_lb[i]:
+                supertrend[i] = final_lb[i]
+                direction[i] = 1
+            else:
+                supertrend[i] = final_ub[i]
+                direction[i] = -1
+    return pd.DataFrame({'supertrend': supertrend, 'direction': direction}, index=df.index)
+
 @app.get("/api/candle_data")
-async def get_candle_data(symbol: str, period: str = "1mo", interval: str = "1d"):
-    """Fetch candle data from Yahoo Finance for custom Plotly rendering."""
+async def get_candle_data(symbol: str, period: str = "max", interval: str = "1d", start: str = "2003-01-01"):
+    """Fetch candle data from Yahoo Finance for custom Plotly rendering with ATR Trailing Stop and Supertrends."""
     try:
         import yfinance as yf
+        import pandas as pd
+        import numpy as np
+        
         raw_ticker = symbol.split(":")[-1] if ":" in symbol else symbol
         ticker = raw_ticker
         
@@ -547,26 +655,101 @@ async def get_candle_data(symbol: str, period: str = "1mo", interval: str = "1d"
             elif "BSE" in symbol.upper():
                 ticker = raw_ticker + ".BO"
         elif not any(x in raw_ticker for x in ["-", "=", "."]):
-            # Default to NSE for plain Indian stock names
             ticker = raw_ticker + ".NS"
             
-        print(f"Fetching candle data for {symbol} -> {ticker}")
-            
-        df = yf.download(ticker, period=period, interval=interval, progress=False)
+        print(f"Fetching candle data for {symbol} -> {ticker} starting from {start}")
+        
+        # Fetch data starting from start (2003-01-01 by default)
+        df = yf.download(ticker, start=start, interval=interval, progress=False)
         if df.empty:
-            return {"error": "No data found for symbol"}
+            df = yf.download(ticker, period="max" if period == "max" else period, interval=interval, progress=False)
+            if df.empty:
+                return {"error": "No data found for symbol"}
+            
+        # Robustly flatten MultiIndex columns if present
+        clean_cols = {}
+        for col in df.columns:
+            if isinstance(col, tuple):
+                metric = next((x for x in col if str(x).lower() in ['open', 'high', 'low', 'close', 'volume', 'adj close']), None)
+                if metric:
+                    clean_cols[col] = metric
+            else:
+                if str(col).lower() in ['open', 'high', 'low', 'close', 'volume', 'adj close']:
+                    clean_cols[col] = col
+                    
+        if clean_cols:
+            df = df[list(clean_cols.keys())]
+            df.columns = [clean_cols[col] for col in df.columns]
+            
+        # Calculate ATR Trailing Stop
+        atr_trail_df = calculate_atr_trail(df, period=10, multiplier=2.0)
+        df['atr_trail'] = atr_trail_df['trail']
+        df['atr_trail_bull'] = atr_trail_df['bull']
+        
+        # Calculate entry zone touch zone boundary (glowing magnet area)
+        tr1 = df['High'] - df['Low']
+        tr2 = (df['High'] - df['Close'].shift(1)).abs()
+        tr3 = (df['Low'] - df['Close'].shift(1)).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr_val = tr.ewm(alpha=1.0/10, adjust=False).mean()
+        df['entry_zone'] = np.where(df['atr_trail_bull'], df['atr_trail'] + atr_val * 0.3, df['atr_trail'] - atr_val * 0.3)
+        
+        # Calculate Supertrend 1W
+        df_weekly = df.resample('W').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum'
+        }).dropna()
+        if not df_weekly.empty:
+            st_weekly = calculate_supertrend(df_weekly, period=10, multiplier=1.7)
+            df['supertrend_1w'] = st_weekly['supertrend'].reindex(df.index, method='ffill')
+            df['supertrend_1w_dir'] = st_weekly['direction'].reindex(df.index, method='ffill')
+        else:
+            df['supertrend_1w'] = np.nan
+            df['supertrend_1w_dir'] = np.nan
+        
+        # Calculate Supertrend 5W
+        df_5weekly = df.resample('5W').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum'
+        }).dropna()
+        if not df_5weekly.empty:
+            st_5weekly = calculate_supertrend(df_5weekly, period=10, multiplier=1.7)
+            df['supertrend_5w'] = st_5weekly['supertrend'].reindex(df.index, method='ffill')
+            df['supertrend_5w_dir'] = st_5weekly['direction'].reindex(df.index, method='ffill')
+        else:
+            df['supertrend_5w'] = np.nan
+            df['supertrend_5w_dir'] = np.nan
+            
+        # Clean helper function to replace nan with None for JSON compliance
+        def clean_series(series):
+            return [None if pd.isna(x) else float(x) for x in series]
             
         # Format for Plotly
         data = {
             "dates": df.index.strftime('%Y-%m-%d %H:%M').tolist(),
-            "open": df['Open'].tolist(),
-            "high": df['High'].tolist(),
-            "low": df['Low'].tolist(),
-            "close": df['Close'].tolist(),
-            "volume": df['Volume'].tolist(),
+            "open": clean_series(df['Open']),
+            "high": clean_series(df['High']),
+            "low": clean_series(df['Low']),
+            "close": clean_series(df['Close']),
+            "volume": clean_series(df['Volume']),
+            "atr_trail": clean_series(df['atr_trail']),
+            "atr_trail_bull": [None if pd.isna(x) else bool(x) for x in df['atr_trail_bull']],
+            "entry_zone": clean_series(df['entry_zone']),
+            "supertrend_1w": clean_series(df['supertrend_1w']),
+            "supertrend_1w_dir": clean_series(df['supertrend_1w_dir']),
+            "supertrend_5w": clean_series(df['supertrend_5w']),
+            "supertrend_5w_dir": clean_series(df['supertrend_5w_dir']),
         }
         return data
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 @app.get("/api/agents/status")
@@ -585,6 +768,125 @@ async def get_market_analysis(_user=Depends(require_auth)):
     if data:
         return data
     return {"status": "no data yet  agents are still running their first cycle"}
+
+
+# In-memory cache for market performance
+_perf_cache = {
+    "data": None,
+    "last_updated": 0
+}
+
+def get_fallback_performance_data():
+    return {
+        "sectors": [
+            {"symbol": "^NSEI", "name": "Nifty 50", "price": 23501.55, "change_pct": 0.45, "is_positive": True},
+            {"symbol": "^NSEBANK", "name": "Banking (Nifty Bank)", "price": 51650.20, "change_pct": 0.85, "is_positive": True},
+            {"symbol": "^CNXIT", "name": "IT (Nifty IT)", "price": 35200.40, "change_pct": -0.62, "is_positive": False},
+            {"symbol": "^CNXAUTO", "name": "Auto (Nifty Auto)", "price": 22450.80, "change_pct": 1.25, "is_positive": True},
+            {"symbol": "^CNXPHARMA", "name": "Pharma (Nifty Pharma)", "price": 19410.15, "change_pct": -0.15, "is_positive": False},
+            {"symbol": "^CNXENERGY", "name": "Energy (Nifty Energy)", "price": 40150.30, "change_pct": 0.95, "is_positive": True},
+            {"symbol": "^CNXFMCG", "name": "FMCG (Nifty FMCG)", "price": 56120.75, "change_pct": 0.22, "is_positive": True},
+            {"symbol": "^CNXINFRA", "name": "Infrastructure", "price": 8620.10, "change_pct": 0.52, "is_positive": True},
+            {"symbol": "^CNXMETAL", "name": "Metals (Nifty Metal)", "price": 9850.40, "change_pct": -1.10, "is_positive": False},
+            {"symbol": "GC=F", "name": "Gold (Safe Haven)", "price": 2331.20, "change_pct": 0.35, "is_positive": True}
+        ],
+        "stocks": [
+            {"symbol": "BHARTIARTL.NS", "name": "Bharti Airtel", "price": 1410.50, "change_pct": 1.85, "is_positive": True},
+            {"symbol": "IDFCFIRSTB.NS", "name": "IDFC First Bank", "price": 81.25, "change_pct": 0.45, "is_positive": True},
+            {"symbol": "ONGC.NS", "name": "ONGC", "price": 272.40, "change_pct": 2.15, "is_positive": True},
+            {"symbol": "RELIANCE.NS", "name": "Reliance", "price": 2910.15, "change_pct": 0.95, "is_positive": True},
+            {"symbol": "HAL.NS", "name": "HAL", "price": 4850.30, "change_pct": -0.85, "is_positive": False},
+            {"symbol": "BEL.NS", "name": "Bharat Electronics", "price": 310.20, "change_pct": -1.25, "is_positive": False},
+            {"symbol": "SBIN.NS", "name": "SBI", "price": 845.60, "change_pct": 1.15, "is_positive": True},
+            {"symbol": "HDFCBANK.NS", "name": "HDFC Bank", "price": 1610.40, "change_pct": 0.75, "is_positive": True},
+            {"symbol": "TCS.NS", "name": "TCS", "price": 3810.15, "change_pct": -0.55, "is_positive": False},
+            {"symbol": "INFY.NS", "name": "Infosys", "price": 1515.30, "change_pct": -0.80, "is_positive": False},
+            {"symbol": "TATAMOTORS.NS", "name": "Tata Motors", "price": 975.20, "change_pct": 1.45, "is_positive": True}
+        ]
+    }
+
+@app.get("/api/market/performance")
+async def get_market_performance(_user=Depends(require_auth)):
+    global _perf_cache
+    import time
+    now = time.time()
+    if _perf_cache["data"] and (now - _perf_cache["last_updated"]) < 300:
+        return _perf_cache["data"]
+        
+    try:
+        import yfinance as yf
+        tickers = {
+            "^NSEI": "Nifty 50",
+            "^NSEBANK": "Banking (Nifty Bank)",
+            "^CNXIT": "IT (Nifty IT)",
+            "^CNXAUTO": "Auto (Nifty Auto)",
+            "^CNXPHARMA": "Pharma (Nifty Pharma)",
+            "^CNXENERGY": "Energy (Nifty Energy)",
+            "^CNXFMCG": "FMCG (Nifty FMCG)",
+            "^CNXINFRA": "Infrastructure",
+            "^CNXMETAL": "Metals (Nifty Metal)",
+            "BHARTIARTL.NS": "Bharti Airtel",
+            "IDFCFIRSTB.NS": "IDFC First Bank",
+            "ONGC.NS": "ONGC",
+            "RELIANCE.NS": "Reliance",
+            "HAL.NS": "HAL",
+            "BEL.NS": "Bharat Electronics",
+            "SBIN.NS": "SBI",
+            "HDFCBANK.NS": "HDFC Bank",
+            "TCS.NS": "TCS",
+            "INFY.NS": "Infosys",
+            "TATAMOTORS.NS": "Tata Motors",
+            "GC=F": "Gold (Safe Haven)"
+        }
+        
+        symbols_list = list(tickers.keys())
+        data = await asyncio.to_thread(yf.download, symbols_list, period="3d", interval="1d", progress=False)
+        
+        results = {
+            "sectors": [],
+            "stocks": []
+        }
+        
+        if not data.empty and 'Close' in data:
+            close_df = data['Close']
+            
+            for symbol, label in tickers.items():
+                if symbol not in close_df.columns:
+                    continue
+                
+                prices = close_df[symbol].dropna().tolist()
+                if len(prices) < 1:
+                    continue
+                
+                current_price = prices[-1]
+                prev_price = prices[-2] if len(prices) > 1 else current_price
+                
+                change_pct = 0.0
+                if prev_price > 0:
+                    change_pct = ((current_price - prev_price) / prev_price) * 100
+                
+                item = {
+                    "symbol": symbol,
+                    "name": label,
+                    "price": round(current_price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "is_positive": change_pct >= 0
+                }
+                
+                if symbol.startswith("^") or symbol == "GC=F":
+                    results["sectors"].append(item)
+                else:
+                    results["stocks"].append(item)
+                    
+        if not results["sectors"] and not results["stocks"]:
+            results = get_fallback_performance_data()
+            
+        _perf_cache["data"] = results
+        _perf_cache["last_updated"] = now
+        return results
+    except Exception as e:
+        print(f"Error fetching performance data: {e}")
+        return get_fallback_performance_data()
 
 @app.get("/api/opportunities")
 async def get_opportunities(_user=Depends(require_auth)):
@@ -609,6 +911,15 @@ async def get_telegram_status(_user=Depends(require_auth)):
     if data:
         return data
     return {"status": "no telegram data yet"}
+
+@app.get("/api/news/status")
+async def get_news_status(_user=Depends(require_auth)):
+    """Return the latest news scanner data from DB."""
+    data = db.get_intelligence("news_scanner")
+    if data:
+        return data
+    return {"status": "no news data yet"}
+
 
 @app.get("/api/indian-market")
 async def get_indian_market(_user=Depends(require_auth)):
@@ -662,6 +973,48 @@ async def get_signals(_user=Depends(require_auth)):
     """Return the AI signal accuracy scorecard from DB."""
     try:
         return db.get_signal_scorecard()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+#  Stock Research Endpoints 
+
+from fastapi import BackgroundTasks
+
+@app.post("/api/research/initiate")
+async def initiate_research(payload: dict, background_tasks: BackgroundTasks, _user=Depends(require_auth)):
+    """Initiates an asynchronous background stock research session."""
+    symbol = payload.get("symbol")
+    if not symbol:
+        return {"error": "Symbol is required"}
+        
+    try:
+        session_id = db.create_research_session(symbol)
+        
+        # Trigger background pipeline
+        from research_agent import run_stock_research_agent
+        background_tasks.add_task(run_stock_research_agent, session_id, symbol)
+        
+        return {"status": "initiated", "session_id": session_id, "symbol": symbol.upper().strip()}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/research/status/{session_id}")
+async def get_research_status(session_id: int, _user=Depends(require_auth)):
+    """Return logs, screenshots, and report for a research session."""
+    try:
+        session = db.get_research_session(session_id)
+        if not session:
+            return {"error": f"Research session {session_id} not found"}
+        return session
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/research/history")
+async def get_research_history(_user=Depends(require_auth)):
+    """Return all past stock research sessions."""
+    try:
+        return db.get_all_research_sessions()
     except Exception as e:
         return {"error": str(e)}
 

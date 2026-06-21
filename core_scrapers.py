@@ -48,6 +48,87 @@ class WebScraper:
             return None
 
     @staticmethod
+    async def extract_visuals_from_url(url: str, timeout: int = 10) -> dict:
+        """
+        Scrape the webpage using Scrapling Fetcher to bypass bot detection, 
+        and parse HTML to extract a high-quality featured image (og:image) 
+        and video player or direct video stream URL.
+        """
+        if not url:
+            return {"image": "", "video": ""}
+            
+        try:
+            from scrapling.fetchers import Fetcher
+            response = await asyncio.to_thread(Fetcher.get, url, impersonate='chrome', timeout=timeout)
+            
+            if response.status != 200:
+                return {"image": "", "video": ""}
+
+            soup = BeautifulSoup(response.body, 'html.parser')
+            
+            image_url = ""
+            video_url = ""
+            
+            # 1. Video extraction
+            # Check og:video tags
+            og_video = (
+                soup.find("meta", attrs={"property": "og:video"}) or 
+                soup.find("meta", attrs={"property": "og:video:url"}) or 
+                soup.find("meta", attrs={"property": "og:video:secure_url"}) or
+                soup.find("meta", attrs={"name": "og:video"})
+            )
+            if og_video and og_video.get("content"):
+                video_url = og_video["content"]
+                
+            # Check twitter:player
+            if not video_url:
+                twitter_player = soup.find("meta", attrs={"name": "twitter:player"})
+                if twitter_player and twitter_player.get("content"):
+                    video_url = twitter_player["content"]
+            
+            # Check HTML5 video source
+            if not video_url:
+                video_tag = soup.find("video")
+                if video_tag:
+                    source_tag = video_tag.find("source")
+                    if source_tag and source_tag.get("src"):
+                        video_url = source_tag["src"]
+                    elif video_tag.get("src"):
+                        video_url = video_tag["src"]
+            
+            # If the video is a relative URL, resolve it
+            if video_url and not video_url.startswith("http"):
+                import urllib.parse
+                video_url = urllib.parse.urljoin(url, video_url)
+                
+            # 2. Image extraction
+            og_image = soup.find("meta", attrs={"property": "og:image"}) or soup.find("meta", attrs={"name": "og:image"})
+            if og_image and og_image.get("content"):
+                image_url = og_image["content"]
+                
+            if not image_url:
+                twitter_image = soup.find("meta", attrs={"name": "twitter:image"})
+                if twitter_image and twitter_image.get("content"):
+                    image_url = twitter_image["content"]
+                    
+            if not image_url:
+                thumbnail = soup.find("meta", attrs={"name": "thumbnail"}) or soup.find("link", attrs={"rel": "image_src"})
+                if thumbnail:
+                    image_url = thumbnail.get("content") or thumbnail.get("href")
+                    
+            if image_url and not image_url.startswith("http"):
+                import urllib.parse
+                image_url = urllib.parse.urljoin(url, image_url)
+                
+            return {
+                "image": image_url or "",
+                "video": video_url or ""
+            }
+        except Exception as e:
+            print(f"Error extracting visuals from {url}: {e}")
+            return {"image": "", "video": ""}
+
+    @staticmethod
     async def capture_screenshot(url: str) -> str | None:
         """Asynchronously capture a full-page screenshot of a given URL as base64 jpeg."""
         if not url: return None
@@ -424,96 +505,184 @@ class TelegramChannelScraper(NewsSource):
 
     async def fetch_data(self, limit=50, hours=6):
         results = []
-        base_url = f"https://t.me/s/{self.channel_slug}"
+        # Use t-me.translate.goog mirror as the primary URL because t.me is heavily DNS-blocked/throttled in this environment
+        base_url = f"https://t-me.translate.goog/s/{self.channel_slug}?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en-GB"
         current_url = base_url
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
         
         try:
-            from scrapling.fetchers import Fetcher
-            while len(results) < limit:
-                response = await asyncio.to_thread(Fetcher.get, current_url, impersonate='chrome', timeout=10)
-                if response.status != 200:
-                    break
-                    
-                soup = BeautifulSoup(response.body, 'html.parser')
-                messages = soup.find_all('div', class_='tgme_widget_message')
-                if not messages:
-                    break
-                    
-                # Process latest messages first on this page
-                page_results = []
-                for msg in reversed(messages):
-                    if len(results) + len(page_results) >= limit:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                while len(results) < limit:
+                    # Fetching via mirror
+                    async with session.get(current_url, headers=headers, timeout=15) as response:
+                        if response.status != 200:
+                            print(f"Error fetching from mirror {current_url}: status {response.status}")
+                            break
+                        html_content = await response.text()
+                        
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    messages = soup.find_all('div', class_='tgme_widget_message')
+                    if not messages:
                         break
                         
-                    post_url = msg.get('data-post', '')
-                    post_id = post_url.split('/')[-1] if post_url else ''
-                    
-                    text_div = msg.find('div', class_='tgme_widget_message_text')
-                    if not text_div: continue
-                    text = text_div.get_text(separator=' ', strip=True)
-                    if len(text) < 10: continue
-                        
-                    time_wrap = msg.find('a', class_='tgme_widget_message_date')
-                    timestamp = datetime.now().isoformat()
-                    if time_wrap:
-                        time_tag = time_wrap.find('time')
-                        if time_tag and time_tag.get('datetime'):
-                            timestamp = time_tag.get('datetime')
+                    # Process latest messages first on this page
+                    page_results = []
+                    for msg in reversed(messages):
+                        if len(results) + len(page_results) >= limit:
+                            break
                             
-                    # Extract Image if present
-                    image_url = ''
-                    photo_wrap = msg.find('a', class_='tgme_widget_message_photo_wrap')
-                    if photo_wrap:
-                        # Extract the background-image URL from style attribute
-                        style = photo_wrap.get('style', '')
-                        img_match = re.search(r"url\('(.+?)'\)", style)
-                        if img_match:
-                            image_url = img_match.group(1)
+                        post_url = msg.get('data-post', '')
+                        post_id = post_url.split('/')[-1] if post_url else ''
+                        
+                        text_div = msg.find('div', class_='tgme_widget_message_text')
+                        if not text_div: continue
+                        text = text_div.get_text(separator=' ', strip=True)
+                        if len(text) < 10: continue
+                            
+                        time_wrap = msg.find('a', class_='tgme_widget_message_date')
+                        timestamp = datetime.now().isoformat()
+                        if time_wrap:
+                            time_tag = time_wrap.find('time')
+                            if time_tag and time_tag.get('datetime'):
+                                timestamp = time_tag.get('datetime')
+                                
+                        # Extract Image if present
+                        image_url = ''
+                        photo_wrap = msg.find('a', class_='tgme_widget_message_photo_wrap')
+                        if photo_wrap:
+                            # Extract the background-image URL from style attribute
+                            style = photo_wrap.get('style', '')
+                            img_match = re.search(r"url\('(.+?)'\)", style)
+                            if img_match:
+                                image_url = img_match.group(1)
 
-                    # Generate a clean descriptive title from the first line / sentence
-                    title_text = text.split('\n')[0].strip()
-                    if not title_text:
-                        title_text = text.strip()
-                    # Clean up multiple spaces, emojis, etc.
-                    title_text = re.sub(r'\s+', ' ', title_text)
-                    if len(title_text) > 80:
-                        truncated = title_text[:80]
-                        last_space = truncated.rfind(' ')
-                        title_text = (truncated[:last_space] if last_space > 40 else truncated) + "..."
-                    
-                    if len(title_text) < 5:
-                        title_text = f"Intel Update from {self.channel_slug}"
+                        # Generate a clean descriptive title from the first line / sentence
+                        title_text = text.split('\n')[0].strip()
+                        if not title_text:
+                            title_text = text.strip()
+                        # Clean up multiple spaces, emojis, etc.
+                        title_text = re.sub(r'\s+', ' ', title_text)
+                        if len(title_text) > 80:
+                            truncated = title_text[:80]
+                            last_space = truncated.rfind(' ')
+                            title_text = (truncated[:last_space] if last_space > 40 else truncated) + "..."
+                        
+                        if len(title_text) < 5:
+                            title_text = f"Intel Update from {self.channel_slug}"
 
-                    page_results.append({
-                        'title': title_text,
-                        'snippet': text,
-                        'link': f"https://t.me/{self.channel_slug}/{post_id}" if post_id else base_url,
-                        'source': f"Telegram: {self.channel_slug}",
-                        'telegram_post_id': post_id,
-                        'source_type': self.source_type,
-                        'timestamp': timestamp,
-                        'image': image_url
-                    })
-                
-                results.extend(page_results)
-                
-                if len(results) >= limit:
-                    break
+                        page_results.append({
+                            'title': title_text,
+                            'snippet': text,
+                            'link': f"https://t.me/{self.channel_slug}/{post_id}" if post_id else f"https://t.me/{self.channel_slug}",
+                            'source': f"Telegram: {self.channel_slug}",
+                            'telegram_post_id': post_id,
+                            'source_type': self.source_type,
+                            'timestamp': timestamp,
+                            'image': image_url
+                        })
                     
-                oldest_post_url = messages[0].get('data-post', '')
-                if not oldest_post_url:
-                    break
+                    results.extend(page_results)
                     
-                oldest_id = oldest_post_url.split('/')[-1]
-                if not oldest_id.isdigit():
-                    break
+                    if len(results) >= limit:
+                        break
+                        
+                    oldest_post_url = messages[0].get('data-post', '')
+                    if not oldest_post_url:
+                        break
+                        
+                    oldest_id = oldest_post_url.split('/')[-1]
+                    if not oldest_id.isdigit():
+                        break
+                        
+                    current_url = f"https://t-me.translate.goog/s/{self.channel_slug}?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en-GB&before={oldest_id}"
                     
-                current_url = f"{base_url}?before={oldest_id}"
-                
         except Exception as e:
-            print(f"Error fetching Telegram data from {current_url}: {e}")
-            
+            print(f"Error fetching Telegram data from mirror for {self.channel_slug}: {e}")
+            # Fallback to scrapling on original domain as absolute backup
+            try:
+                print(f"Falling back to original scrapling for {self.channel_slug}...")
+                from scrapling.fetchers import Fetcher
+                backup_base_url = f"https://t.me/s/{self.channel_slug}"
+                backup_current_url = backup_base_url
+                backup_results = []
+                while len(backup_results) < limit:
+                    response = await asyncio.to_thread(Fetcher.get, backup_current_url, impersonate='chrome', timeout=10)
+                    if response.status != 200:
+                        break
+                        
+                    soup = BeautifulSoup(response.body, 'html.parser')
+                    messages = soup.find_all('div', class_='tgme_widget_message')
+                    if not messages:
+                        break
+                        
+                    page_results = []
+                    for msg in reversed(messages):
+                        if len(backup_results) + len(page_results) >= limit:
+                            break
+                            
+                        post_url = msg.get('data-post', '')
+                        post_id = post_url.split('/')[-1] if post_url else ''
+                        
+                        text_div = msg.find('div', class_='tgme_widget_message_text')
+                        if not text_div: continue
+                        text = text_div.get_text(separator=' ', strip=True)
+                        if len(text) < 10: continue
+                            
+                        time_wrap = msg.find('a', class_='tgme_widget_message_date')
+                        timestamp = datetime.now().isoformat()
+                        if time_wrap:
+                            time_tag = time_wrap.find('time')
+                            if time_tag and time_tag.get('datetime'):
+                                timestamp = time_tag.get('datetime')
+                                
+                        image_url = ''
+                        photo_wrap = msg.find('a', class_='tgme_widget_message_photo_wrap')
+                        if photo_wrap:
+                            style = photo_wrap.get('style', '')
+                            img_match = re.search(r"url\('(.+?)'\)", style)
+                            if img_match:
+                                image_url = img_match.group(1)
+
+                        title_text = text.split('\n')[0].strip()
+                        if not title_text:
+                            title_text = text.strip()
+                        title_text = re.sub(r'\s+', ' ', title_text)
+                        if len(title_text) > 80:
+                            truncated = title_text[:80]
+                            last_space = truncated.rfind(' ')
+                            title_text = (truncated[:last_space] if last_space > 40 else truncated) + "..."
+                        
+                        if len(title_text) < 5:
+                            title_text = f"Intel Update from {self.channel_slug}"
+
+                        page_results.append({
+                            'title': title_text,
+                            'snippet': text,
+                            'link': f"https://t.me/{self.channel_slug}/{post_id}" if post_id else backup_base_url,
+                            'source': f"Telegram: {self.channel_slug}",
+                            'telegram_post_id': post_id,
+                            'source_type': self.source_type,
+                            'timestamp': timestamp,
+                            'image': image_url
+                        })
+                    
+                    backup_results.extend(page_results)
+                    if len(backup_results) >= limit:
+                        break
+                    oldest_post_url = messages[0].get('data-post', '')
+                    if not oldest_post_url:
+                        break
+                    oldest_id = oldest_post_url.split('/')[-1]
+                    if not oldest_id.isdigit():
+                        break
+                    backup_current_url = f"{backup_base_url}?before={oldest_id}"
+                results = backup_results
+            except Exception as fb_err:
+                print(f"Fallback also failed for {self.channel_slug}: {fb_err}")
+                
         self.last_check = datetime.now()
         return self.filter_by_date(results, hours)
 

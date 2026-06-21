@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy, Component, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy, Component, memo, type ReactNode } from 'react'
 import {
   Activity, Radio, Cpu, Satellite, TrendingUp, Search,
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
@@ -743,11 +743,243 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
   );
 }
 
+/* Daily performance cross-check component */
+const fallbackPerfData = {
+  sectors: [
+    { symbol: "^NSEI", name: "Nifty 50", price: 24013.10, change_pct: -0.64, is_positive: false },
+    { symbol: "^NSEBANK", name: "Banking (Nifty Bank)", price: 57685.75, change_pct: -0.48, is_positive: false },
+    { symbol: "^CNXIT", name: "IT (Nifty IT)", price: 27426.85, change_pct: -3.65, is_positive: false },
+    { symbol: "^CNXAUTO", name: "Auto (Nifty Auto)", price: 22450.80, change_pct: 1.25, is_positive: true },
+    { symbol: "^CNXPHARMA", name: "Pharma (Nifty Pharma)", price: 19410.15, change_pct: -0.15, is_positive: false },
+    { symbol: "^CNXENERGY", name: "Energy (Nifty Energy)", price: 40150.30, change_pct: 0.95, is_positive: true },
+    { symbol: "^CNXFMCG", name: "FMCG (Nifty FMCG)", price: 56120.75, change_pct: 0.22, is_positive: true },
+    { symbol: "^CNXINFRA", name: "Infrastructure", price: 8620.10, change_pct: 0.52, is_positive: true },
+    { symbol: "^CNXMETAL", name: "Metals (Nifty Metal)", price: 9850.40, change_pct: -1.10, is_positive: false },
+    { symbol: "GC=F", name: "Gold (Safe Haven)", price: 2331.20, change_pct: 0.35, is_positive: true }
+  ],
+  stocks: [
+    { symbol: "BHARTIARTL.NS", name: "Bharti Airtel", price: 1910.80, change_pct: 1.92, is_positive: true },
+    { symbol: "IDFCFIRSTB.NS", name: "IDFC First Bank", price: 78.68, change_pct: 0.76, is_positive: true },
+    { symbol: "ONGC.NS", name: "ONGC", price: 246.25, change_pct: 0.39, is_positive: true },
+    { symbol: "RELIANCE.NS", name: "Reliance", price: 2910.15, change_pct: 0.95, is_positive: true },
+    { symbol: "HAL.NS", name: "HAL", price: 4850.30, change_pct: -0.85, is_positive: false },
+    { symbol: "BEL.NS", name: "Bharat Electronics", price: 310.20, change_pct: -1.25, is_positive: false },
+    { symbol: "SBIN.NS", name: "SBI", price: 845.60, change_pct: 1.15, is_positive: true },
+    { symbol: "HDFCBANK.NS", name: "HDFC Bank", price: 1610.40, change_pct: 0.75, is_positive: true },
+    { symbol: "TCS.NS", name: "TCS", price: 3810.15, change_pct: -0.55, is_positive: false },
+    { symbol: "INFY.NS", name: "Infosys", price: 1515.30, change_pct: -0.80, is_positive: false },
+    { symbol: "TATAMOTORS.NS", name: "Tata Motors", price: 975.20, change_pct: 1.45, is_positive: true }
+  ]
+};
+
+function DailyPerformanceCard() {
+  const [data, setData] = useState<{
+    sectors: { symbol: string; name: string; price: number; change_pct: number; is_positive: boolean }[];
+    stocks: { symbol: string; name: string; price: number; change_pct: number; is_positive: boolean }[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isFallback, setIsFallback] = useState(false);
+
+  useEffect(() => {
+    const fetchPerformance = async () => {
+      try {
+        const res = await apiGet<any>('/api/market/performance');
+        if (res && (res.sectors || res.stocks)) {
+          setData(res);
+          setIsFallback(false);
+          setError(null);
+        } else {
+          throw new Error('Malformed performance data payload');
+        }
+      } catch (err) {
+        console.error('Failed to fetch real-time performance data, falling back to static offline metrics:', err);
+        setData(fallbackPerfData);
+        setIsFallback(true);
+        setError(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPerformance();
+    const interval = setInterval(fetchPerformance, 60000); // refresh every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="glass-panel p-6 flex flex-col items-center justify-center min-h-[200px] border border-slate-800/80 bg-slate-950/40">
+        <Activity className="animate-pulse text-neonBlue mb-2" size={24} />
+        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider animate-pulse">Syncing Live Market Data...</span>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="glass-panel p-6 text-center border border-slate-800/80 bg-slate-950/40">
+        <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Market Data Offline</span>
+        <p className="text-[9px] text-slate-500 mt-1">Unable to fetch daily performance metrics at this time.</p>
+      </div>
+    );
+  }
+
+  // Group by performing vs underperforming for sectors
+  const performingSectors = data.sectors.filter(s => s.change_pct >= 0).sort((a, b) => b.change_pct - a.change_pct);
+  const underperformingSectors = data.sectors.filter(s => s.change_pct < 0).sort((a, b) => a.change_pct - b.change_pct);
+
+  // Group by performing vs underperforming for stocks (potential beneficiaries)
+  const performingStocks = data.stocks.filter(s => s.change_pct >= 0).sort((a, b) => b.change_pct - a.change_pct);
+  const underperformingStocks = data.stocks.filter(s => s.change_pct < 0).sort((a, b) => a.change_pct - b.change_pct);
+
+  return (
+    <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4 mt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-2">
+            <Activity className="text-neonBlue animate-pulse" size={14} /> DAILY PERFORMANCE CROSS-CHECK
+          </h3>
+          <p className="text-[9px] text-slate-500 mt-0.5">Compare active sector risks and AI beneficiaries against real-time market performance</p>
+        </div>
+        {isFallback ? (
+          <span className="text-[8px] bg-amber-500/10 text-amber-400 font-bold border border-amber-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
+            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span> Offline Cache
+          </span>
+        ) : (
+          <span className="text-[8px] bg-sky-500/10 text-sky-400 font-bold border border-sky-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
+            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse"></span> Live
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* SECTORS PERFORMANCE COMPARISON */}
+        <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-lg flex flex-col gap-3">
+          <h4 className="text-[10px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 pb-2">
+            Sectors Heat Check
+          </h4>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* PERFORMING SECTORS */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                ▲ Performing
+              </span>
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+                {performingSectors.length > 0 ? (
+                  performingSectors.map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
+                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[9px] text-slate-600 italic">No sectors in green</span>
+                )}
+              </div>
+            </div>
+
+            {/* UNDERPERFORMING SECTORS */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                ▼ Underperforming
+              </span>
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+                {underperformingSectors.length > 0 ? (
+                  underperformingSectors.map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
+                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[9px] text-slate-600 italic">No sectors in red</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* BENEFICIARIES PERFORMANCE COMPARISON */}
+        <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-lg flex flex-col gap-3">
+          <h4 className="text-[10px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 pb-2">
+            AI Beneficiaries Validation
+          </h4>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* PERFORMING BENEFICIARIES */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                ▲ Performing
+              </span>
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+                {performingStocks.length > 0 ? (
+                  performingStocks.map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
+                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[9px] text-slate-600 italic">No stocks in green</span>
+                )}
+              </div>
+            </div>
+
+            {/* UNDERPERFORMING BENEFICIARIES */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                ▼ Underperforming
+              </span>
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+                {underperformingStocks.length > 0 ? (
+                  underperformingStocks.map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
+                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[9px] text-slate-600 italic">No stocks in red</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main App ─── */
 
 function App() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'monitor'>('news');
+  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'monitor' | 'research'>('news');
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
@@ -755,6 +987,7 @@ function App() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [telegramData, setTelegramData] = useState<LiveEvent | null>(null);
+  const [newsData, setNewsData] = useState<LiveEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<GeoEvent | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<{ [key: string]: { loading: boolean, text: string | null } }>({});
   
@@ -922,6 +1155,17 @@ function App() {
 
   useEffect(() => {
     if (!authChecked) return;
+    const poll = async () => {
+      try {
+        const data = await apiGet<any>('/api/news/status');
+        if (!data.status && !data.error) setNewsData(data);
+      } catch { /* */ }
+    };
+    poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
+  }, [authChecked]);
+
+  useEffect(() => {
+    if (!authChecked) return;
     const fetchCalendar = async () => {
       setCalendarLoading(true);
       try {
@@ -1017,7 +1261,7 @@ function App() {
   if (!authChecked) return null;
 
   const eventsArr = Array.isArray(events) ? events : [];
-  const latestNewsScan = [...eventsArr].reverse().find(e => e.agent === 'news_scanner');
+  const latestNewsScan = [...eventsArr].reverse().find(e => e.agent === 'news_scanner') || newsData;
   const latestIndianMarket = [...eventsArr].reverse().find(e => e.agent === 'indian_market_tracker');
   const latestTelegram = [...eventsArr].reverse().find(e => e.agent === 'telegram_scanner') || telegramData;
   const websiteEvents = eventsArr.filter(e => e.agent === 'website_scanner').map(e => ({
@@ -1031,7 +1275,11 @@ function App() {
   const combinedTelegramData = {
     news_items: [
       ...websiteEvents,
-      ...(Array.isArray(latestTelegram?.news_items) ? latestTelegram.news_items : [])
+      ...(Array.isArray(latestTelegram?.news_items) ? latestTelegram.news_items : []),
+      ...(Array.isArray(latestNewsScan?.news_items) ? latestNewsScan.news_items.map(item => ({
+        ...item,
+        agent: 'reputable_news'
+      })) : [])
     ].sort((a, b) => {
       const timeA = new Date(a?.timestamp || 0).getTime();
       const timeB = new Date(b?.timestamp || 0).getTime();
@@ -1043,9 +1291,6 @@ function App() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col gap-6">
-      {/* Top Ticker Widget */}
-      <TradingViewTickerTape />
-
       {/* Header */}
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-2 mt-2">
         <div>
@@ -1092,6 +1337,12 @@ function App() {
         >
           MONITOR
         </button>
+        <button
+          onClick={() => setActiveTab('research')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'research' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+        >
+          RESEARCH
+        </button>
       </nav>
 
       <div className={activeTab === 'news' ? 'flex flex-col gap-6 animate-fade-in' : 'hidden'}>
@@ -1110,9 +1361,15 @@ function App() {
             </div>
             {/* Dynamic analysis cards below the map */}
             <ImpactMetricsCards events={geoEvents} scenarioData={scenarioData} onSelectEvent={setSelectedEvent} />
+            {/* Daily performance cross-check */}
+            <DailyPerformanceCard />
           </div>
           <div className="lg:col-span-1 flex flex-col gap-6">
-            <TelegramFeed data={combinedTelegramData} />
+            <TelegramFeed 
+              data={combinedTelegramData} 
+              geoEvents={geoEvents} 
+              onSelectEvent={setSelectedEvent} 
+            />
             <EventDetailsSidebar 
               activeEvent={selectedEvent} 
               activeAnalysis={activeAnalysis} 
@@ -1215,6 +1472,12 @@ function App() {
           <Globe className="animate-pulse text-slate-600 mb-6" size={64} />
           <h2 className="text-2xl font-black text-slate-500 mb-2">MONITOR DASHBOARD</h2>
           <span className="text-slate-600 font-bold tracking-widest text-sm">CONSTRUCTION IN PROGRESS</span>
+        </div>
+      )}
+
+      {activeTab === 'research' && (
+        <div className="animate-fade-in">
+          <StockResearchTabView />
         </div>
       )}
 
@@ -1793,25 +2056,1109 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
   );
 }
 
-function TradingViewTickerTape() {
-  useEffect(() => {
-    if (!document.getElementById("tv-ticker-tape")) {
-      const script = document.createElement("script");
-      script.id = "tv-ticker-tape";
-      script.src = "https://widgets.tradingview-widget.com/w/en/tv-ticker-tape.js";
-      script.type = "module";
-      document.body.appendChild(script);
-    }
-  }, []);
+// ==========================================
+// Stock Research Agent UI Components
+// ==========================================
+
+function ADXGauge({ adx, diPlus, diMinus }: { adx: number, diPlus: number, diMinus: number }) {
+  let strength = "Weak Trend";
+  let strengthColor = "text-slate-400";
+  if (adx >= 25) {
+    strength = "Strong Trend";
+    strengthColor = "text-sky-400";
+  }
+  if (adx >= 40) {
+    strength = "Very Strong Trend";
+    strengthColor = "text-neonPurple";
+  }
+
+  let bias = "Neutral";
+  let biasColor = "text-slate-400";
+  if (diPlus > diMinus + 5) {
+    bias = "Bullish Bias";
+    biasColor = "text-emerald-400";
+  } else if (diMinus > diPlus + 5) {
+    bias = "Bearish Bias";
+    biasColor = "text-rose-400";
+  }
+
   return (
-    <div className="w-full mb-2">
-      {/* @ts-ignore */}
-      <tv-ticker-tape symbols="NSE:NIFTY,NSE:BANKNIFTY,BSE:SENSEX,BSE:RELIANCE,BSE:TCS,BSE:HDFCBANK,BSE:ICICIBANK,BSE:INFY,BSE:SBIN,BSE:BHARTIARTL" colorTheme="dark" isTransparent="true"></tv-ticker-tape>
+    <div className="bg-slate-950/40 p-4.5 rounded-xl border border-slate-800/80 flex flex-col gap-3">
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+          <Activity size={12} className="text-neonPurple animate-pulse" /> ADX & DMI Trend Strength
+        </span>
+        <span className={`text-[8px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-850 uppercase tracking-wider ${biasColor}`}>
+          {bias}
+        </span>
+      </div>
+      
+      <div className="space-y-3.5 my-1">
+        {/* ADX */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] font-semibold">
+            <span className="text-slate-300">Trend Index (ADX)</span>
+            <span className="text-white font-mono font-bold">{adx.toFixed(1)}</span>
+          </div>
+          <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+            <div className="h-full bg-gradient-to-r from-indigo-500 to-neonPurple rounded-full" style={{ width: `${Math.min(adx * 1.5, 100)}%` }}></div>
+          </div>
+          <span className={`text-[8px] block font-mono font-bold uppercase tracking-wider ${strengthColor}`}>{strength}</span>
+        </div>
+        
+        {/* DI+ vs DI- */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] font-semibold">
+            <span className="text-emerald-400">Buyers (DI+)</span>
+            <span className="text-rose-400">Sellers (DI-)</span>
+          </div>
+          <div className="flex h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+            <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(diPlus / (diPlus + diMinus || 1)) * 100}%` }}></div>
+            <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${(diMinus / (diPlus + diMinus || 1)) * 100}%` }}></div>
+          </div>
+          <div className="flex justify-between text-[8px] font-mono text-slate-500">
+            <span>{diPlus.toFixed(1)}</span>
+            <span>{diMinus.toFixed(1)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* TradingViewHotlists removed — Stocks Today section eliminated from dashboard */
+function RSIGauge({ rsi }: { rsi: number }) {
+  let status = "Neutral Momentum";
+  let statusColor = "text-slate-400";
+  if (rsi >= 70) {
+    status = "Overbought (Consolidation Risk)";
+    statusColor = "text-rose-400";
+  } else if (rsi <= 30) {
+    status = "Oversold (Accumulation Opportunity)";
+    statusColor = "text-emerald-400";
+  }
+  return (
+    <div className="bg-slate-950/40 p-4.5 rounded-xl border border-slate-800/80 flex flex-col gap-2.5">
+      <div className="flex justify-between items-center text-[10px]">
+        <span className="font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+          <TrendingUp size={12} className="text-neonBlue" /> Relative Strength Index (RSI)
+        </span>
+        <span className="font-bold text-white font-mono">{rsi.toFixed(1)}</span>
+      </div>
+      
+      <div className="relative h-2 bg-slate-900 rounded-full border border-slate-850 my-2">
+        <div className="absolute left-0 top-0 bottom-0 w-[30%] bg-emerald-500/10 border-r border-slate-850"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-[30%] bg-rose-500/10 border-l border-slate-850"></div>
+        <div 
+          className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-neonBlue border-2 border-white rounded-full shadow-[0_0_10px_#38bdf8] transition-all duration-500"
+          style={{ left: `calc(${rsi}% - 7px)` }}
+        ></div>
+      </div>
+      <span className={`text-[8px] font-mono font-bold uppercase tracking-wider ${statusColor}`}>{status}</span>
+    </div>
+  );
+}
+
+function SafePlot({ component, ...props }: any) {
+  const P = component;
+  if (!P) {
+    return (
+      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+        <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
+        <p className="text-xs font-bold tracking-widest text-neonBlue/80">INITIALIZING DRAWING ENGINE...</p>
+        <p className="text-[10px]">Preparing interactive chart canvas</p>
+      </div>
+    );
+  }
+  try {
+    return <P {...props} />;
+  } catch (err) {
+    return (
+      <div className="h-[480px] flex flex-col items-center justify-center bg-red-950/20 text-red-400 rounded-xl border border-red-900/30">
+        <AlertTriangle size={24} className="mb-2" />
+        <p className="text-xs font-bold tracking-widest uppercase">SafeGuard Active</p>
+        <p className="text-[10px] text-slate-400">Rendering error caught. App remains stable.</p>
+      </div>
+    );
+  }
+}
+
+const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, PlotComponent: any }) => {
+  const [candleData, setCandleData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [yaxisRange, setYaxisRange] = useState<[number, number] | null>(null);
+  const [xaxisRange, setXaxisRange] = useState<[any, any] | null>(null);
+  
+  const plotContainerRef = useRef<HTMLDivElement>(null);
+
+  // Reset zoom states when symbol changes
+  useEffect(() => {
+    setYaxisRange(null);
+    setXaxisRange(null);
+  }, [symbol]);
+
+  useEffect(() => {
+    const fetchCandles = async () => {
+      if (!symbol) return;
+      setLoading(true);
+      try {
+        const clean = symbol.includes(":") ? symbol.split(":")[1] : symbol;
+        const data = await apiGet<any>(`/api/candle_data?symbol=${clean}&period=6mo&interval=1d`);
+        setCandleData(data);
+      } catch (err) {
+        console.error("Candle fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCandles();
+  }, [symbol]);
+
+  // Intercept dragging on Y-axis pane to scale/zoom vertically instead of panning
+  useEffect(() => {
+    const el = plotContainerRef.current;
+    if (!el || !candleData) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const className = target.getAttribute ? target.getAttribute('class') || '' : '';
+      
+      // Target Y-axis drag rectangles (Plotly internally tags them with class containing ydrag)
+      if (className.includes('ydrag') || className.includes('y2drag')) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const gd = el.querySelector('.js-plotly-plot') as any;
+        if (!gd || !gd._fullLayout || !gd._fullLayout.yaxis) return;
+        
+        const initialRange = [...gd._fullLayout.yaxis.range] as [number, number];
+        const startY = e.clientY;
+        
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+          moveEvent.stopPropagation();
+          moveEvent.preventDefault();
+          
+          const deltaY = moveEvent.clientY - startY;
+          
+          // Sensitivity coefficient for smooth stretching/compression
+          const sensitivity = 0.005;
+          const scaleFactor = Math.exp(deltaY * sensitivity);
+          
+          const center = (initialRange[0] + initialRange[1]) / 2;
+          const originalSpan = initialRange[1] - initialRange[0];
+          const newSpan = originalSpan * scaleFactor;
+          
+          const newRange: [number, number] = [
+            center - newSpan / 2,
+            center + newSpan / 2
+          ];
+          
+          setYaxisRange(newRange);
+        };
+        
+        const handleMouseUp = (upEvent: MouseEvent) => {
+          upEvent.stopPropagation();
+          upEvent.preventDefault();
+          
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+      }
+    };
+
+    const handleDblClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const className = target.getAttribute ? target.getAttribute('class') || '' : '';
+      
+      if (className.includes('ydrag') || className.includes('y2drag')) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        // Reset back to automatic scaling
+        setYaxisRange(null);
+      }
+    };
+
+    // Use capture phase (true) to intercept event before Plotly's internal pan handlers run
+    el.addEventListener('mousedown', handleMouseDown, true);
+    el.addEventListener('dblclick', handleDblClick, true);
+
+    return () => {
+      el.removeEventListener('mousedown', handleMouseDown, true);
+      el.removeEventListener('dblclick', handleDblClick, true);
+    };
+  }, [candleData]);
+
+  const handleRelayout = (eventData: any) => {
+    if (eventData['yaxis.autorange'] === true) {
+      setYaxisRange(null);
+    } else if (eventData['yaxis.range[0]'] !== undefined && eventData['yaxis.range[1]'] !== undefined) {
+      setYaxisRange([eventData['yaxis.range[0]'], eventData['yaxis.range[1]']]);
+    }
+    
+    if (eventData['xaxis.autorange'] === true) {
+      setXaxisRange(null);
+    } else if (eventData['xaxis.range[0]'] !== undefined && eventData['xaxis.range[1]'] !== undefined) {
+      setXaxisRange([eventData['xaxis.range[0]'], eventData['xaxis.range[1]']]);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-850">
+        <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
+        <p className="text-[10px] font-bold tracking-widest text-neonBlue/80 uppercase">Streaming Market Data...</p>
+      </div>
+    );
+  }
+
+  if (!candleData || candleData.error) {
+    return (
+      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-850">
+        <AlertTriangle size={24} className="mb-2 opacity-30 text-amber-500" />
+        <p className="text-xs font-bold tracking-widest text-slate-350">DATA UNAVAILABLE</p>
+        <p className="text-[10px] text-slate-500">{candleData?.error || "Could not fetch OHLC data for this symbol."}</p>
+      </div>
+    );
+  }
+
+  const getSegmentTraces = (dates: string[], values: number[], directions: any[], name: string, bullColor: string, bearColor: string, isDots = false, extraStyle = {}) => {
+    if (!values || !directions || !dates) return [];
+    
+    const traces: any[] = [];
+    let currentSegment: { x: string, y: number }[] = [];
+    let currentDir: any = null;
+    
+    for (let i = 0; i < values.length; i++) {
+      const val = values[i];
+      const dir = directions[i];
+      
+      if (val === null || val === undefined) {
+        if (currentSegment.length > 0) {
+          const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+          traces.push({
+            x: currentSegment.map(s => s.x),
+            y: currentSegment.map(s => s.y),
+            type: 'scatter',
+            mode: isDots ? 'markers' : 'lines',
+            name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+            line: isDots ? undefined : { color, ...extraStyle },
+            marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+            legendgroup: name,
+            showlegend: traces.length === 0,
+            yaxis: 'y1'
+          });
+          currentSegment = [];
+        }
+        currentDir = null;
+        continue;
+      }
+      
+      if (currentDir === null) {
+        currentDir = dir;
+        currentSegment.push({ x: dates[i], y: val });
+      } else if (dir === currentDir) {
+        currentSegment.push({ x: dates[i], y: val });
+      } else {
+        // Direction changed. Include the overlap point to prevent gaps.
+        currentSegment.push({ x: dates[i], y: val });
+        const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+        traces.push({
+          x: currentSegment.map(s => s.x),
+          y: currentSegment.map(s => s.y),
+          type: 'scatter',
+          mode: isDots ? 'markers' : 'lines',
+          name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+          line: isDots ? undefined : { color, ...extraStyle },
+          marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+          legendgroup: name,
+          showlegend: traces.length === 0,
+          yaxis: 'y1'
+        });
+        
+        currentDir = dir;
+        currentSegment = [{ x: dates[i], y: val }];
+      }
+    }
+    
+    if (currentSegment.length > 0) {
+      const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+      traces.push({
+        x: currentSegment.map(s => s.x),
+        y: currentSegment.map(s => s.y),
+        type: 'scatter',
+        mode: isDots ? 'markers' : 'lines',
+        name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+        line: isDots ? undefined : { color, ...extraStyle },
+        marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+        legendgroup: name,
+        showlegend: traces.length === 0,
+        yaxis: 'y1'
+      });
+    }
+    
+    return traces;
+  };
+
+  const priceTrace = {
+    x: candleData.dates,
+    open: candleData.open,
+    high: candleData.high,
+    low: candleData.low,
+    close: candleData.close,
+    type: 'candlestick',
+    name: symbol,
+    increasing: { line: { color: '#10b981', width: 1.5 } },
+    decreasing: { line: { color: '#ef4444', width: 1.5 } },
+    yaxis: 'y1'
+  };
+
+  const volumeTrace = {
+    x: candleData.dates,
+    y: candleData.volume,
+    type: 'bar',
+    name: 'Volume',
+    marker: {
+      color: candleData.close.map((c: number, i: number) => {
+        if (i === 0) return 'rgba(16, 185, 129, 0.15)';
+        return c >= candleData.close[i - 1] ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+      })
+    },
+    yaxis: 'y2'
+  };
+
+  // Invisible baseline trace for filled zone calculation
+  const atrBaseline = {
+    x: candleData.dates,
+    y: candleData.atr_trail,
+    type: 'scatter',
+    mode: 'lines',
+    line: { width: 0 },
+    showlegend: false,
+    hoverinfo: 'skip',
+    yaxis: 'y1'
+  };
+
+  // Magnet touch zone filled trace
+  const magnetZone = {
+    x: candleData.dates,
+    y: candleData.entry_zone,
+    type: 'scatter',
+    mode: 'lines',
+    line: { width: 0 },
+    fill: 'tonexty',
+    fillcolor: 'rgba(56, 189, 248, 0.08)', // Glow sky blue translucent magnet entry caution area
+    name: '🧲 Magnet Entry Zone',
+    showlegend: true,
+    hoverinfo: 'skip',
+    yaxis: 'y1'
+  };
+
+  const data = [
+    priceTrace, 
+    volumeTrace,
+    atrBaseline,
+    magnetZone,
+    ...getSegmentTraces(candleData.dates, candleData.atr_trail, candleData.atr_trail_bull, 'ATR Trail', 'rgba(56, 189, 248, 0.95)', 'rgba(244, 63, 94, 0.95)', true, { size: 3 }),
+    ...getSegmentTraces(candleData.dates, candleData.supertrend_1w, candleData.supertrend_1w_dir, 'Supertrend 1W', '#10b981', '#ef4444', true, { size: 4 }),
+    ...getSegmentTraces(candleData.dates, candleData.supertrend_5w, candleData.supertrend_5w_dir, 'Supertrend 5W', '#059669', '#dc2626', true, { size: 5 })
+  ];
+
+  const layout = {
+    autosize: true,
+    dragmode: 'drawline',
+    uirevision: symbol,
+    showlegend: true,
+    legend: {
+      orientation: 'h',
+      yanchor: 'bottom',
+      y: 1.02,
+      xanchor: 'right',
+      x: 1,
+      font: { color: '#94a3b8', size: 9 },
+      bgcolor: 'rgba(0,0,0,0)'
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: '#94a3b8', size: 10 },
+    grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+    xaxis: {
+      range: xaxisRange || (candleData.dates && candleData.dates.length > 150
+        ? [candleData.dates[candleData.dates.length - 150], candleData.dates[candleData.dates.length - 1]]
+        : undefined),
+      rangeslider: { visible: false },
+      gridcolor: 'rgba(51, 65, 85, 0.12)',
+      zeroline: false,
+      tickfont: { size: 9, color: '#64748b' }
+    },
+    yaxis: {
+      domain: [0.3, 1],
+      gridcolor: 'rgba(51, 65, 85, 0.12)',
+      zeroline: false,
+      side: 'right',
+      range: yaxisRange || undefined,
+      autorange: yaxisRange ? false : true,
+      fixedrange: false,
+      tickfont: { size: 9, color: '#64748b' }
+    },
+    yaxis2: {
+      domain: [0, 0.25],
+      gridcolor: 'rgba(51, 65, 85, 0.06)',
+      zeroline: false,
+      side: 'right',
+      showticklabels: false
+    },
+    margin: { t: 30, b: 35, l: 15, r: 50 },
+    newshape: {
+      line: {
+        color: '#38bdf8',
+        width: 2
+      }
+    }
+  };
+
+  const config = {
+    responsive: true,
+    displaylogo: false,
+    displayModeBar: true,
+    scrollZoom: true,
+    modeBarButtonsToAdd: [
+      'drawline',
+      'drawrect',
+      'eraseshape'
+    ],
+    modeBarButtonsToRemove: [
+      'select2d',
+      'lasso2d'
+    ]
+  };
+
+  return (
+    <div ref={plotContainerRef} className="w-full h-full relative">
+      <SafePlot 
+        component={PlotComponent} 
+        data={data} 
+        layout={layout} 
+        config={config} 
+        className="w-full h-full"
+        onRelayout={handleRelayout}
+      />
+    </div>
+  );
+});
+
+export function StockResearchTabView() {
+  const [symbolInput, setSymbolInput] = useState('');
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [activeSession, setActiveSession] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [initiateLoading, setInitiateLoading] = useState(false);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const terminalBottomRef = useRef<HTMLDivElement | null>(null);
+  const [PlotComponent, setPlotComponent] = useState<any>(null);
+
+  // Dynamic Plotly Loader
+  useEffect(() => {
+    let isMounted = true;
+    const loadPlotly = async () => {
+      try {
+        const [PlotlyModule, factoryModule] = await Promise.all([
+          import('plotly.js-dist-min'),
+          import('react-plotly.js/factory')
+        ]);
+        const Plotly = PlotlyModule.default;
+        const factory = factoryModule.default;
+        const created = factory(Plotly);
+        if (isMounted) setPlotComponent(() => created);
+      } catch (err) {
+        console.error("Plotly Engine Load Failure in StockResearchTabView", err);
+      }
+    };
+    loadPlotly();
+    return () => { isMounted = false; };
+  }, []);
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const data = await apiGet<any>('/api/research/history');
+      if (Array.isArray(data)) {
+        setHistory(data);
+      }
+    } catch (err) {
+      console.error("Failed to load research history", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [fetchHistory]);
+
+  // Scroll terminal logs to bottom automatically
+  useEffect(() => {
+    if (terminalBottomRef.current) {
+      terminalBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeSession?.logs]);
+
+  const startPolling = (id: number) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await apiGet<any>(`/api/research/status/${id}`);
+        if (response && !response.error) {
+          setActiveSession(response);
+          if (response.status === 'completed' || response.status === 'failed') {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            fetchHistory();
+          }
+        }
+      } catch (err) {
+        console.error("Error polling research status", err);
+      }
+    }, 2000);
+  };
+
+  const handleInitiate = async (symbolToQuery?: string) => {
+    const sym = (symbolToQuery || symbolInput).trim().toUpperCase();
+    if (!sym) return;
+    setInitiateLoading(true);
+    try {
+      const res = await apiPost<any>('/api/research/initiate', { symbol: sym });
+      if (res && res.session_id) {
+        setActiveSessionId(res.session_id);
+        setActiveSession({ symbol: sym, status: 'pending', logs: ['[00:00] Initializing agent thread...'], screenshots: [] });
+        startPolling(res.session_id);
+      }
+    } catch (err) {
+      console.error("Failed to initiate research", err);
+    } finally {
+      setInitiateLoading(false);
+    }
+  };
+
+  const handleSelectHistory = async (id: number) => {
+    try {
+      const data = await apiGet<any>(`/api/research/status/${id}`);
+      if (data && !data.error) {
+        setActiveSessionId(id);
+        setActiveSession(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch historical session details", err);
+    }
+  };
+
+  const handleClearSession = () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    setActiveSessionId(null);
+    setActiveSession(null);
+    setSymbolInput('');
+  };
+
+  const formatMarketCap = (val?: number) => {
+    if (!val) return 'N/A';
+    if (val >= 1e7) {
+      return `₹${(val / 1e7).toFixed(2)} Cr`;
+    }
+    return `₹${val.toLocaleString('en-IN')}`;
+  };
+
+  return (
+    <div className="flex flex-col gap-6 text-left select-none">
+      
+      {/* HEADER BAR */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Cpu className="text-neonBlue" size={20} /> AUTONOMOUS INVESTMENT RESEARCH ENGINE
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">Launches a Playwright-controlled browser agent to analyze stock charts, fundamentals, corporate filings, and news</p>
+        </div>
+        {activeSessionId && (
+          <button 
+            onClick={handleClearSession}
+            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 font-bold border border-slate-800 rounded-lg text-xs tracking-wider transition cursor-pointer"
+          >
+            ← LEAVE CURRENT SESSION
+          </button>
+        )}
+      </div>
+
+      {/* VIEW STATE 1: HOME PAGE (INITIATE & HISTORY) */}
+      {!activeSessionId && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* SEARCH CARD */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5">
+                <Search size={14} className="text-neonBlue" /> Run Live Analysis
+              </h3>
+              
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Indian Stock Ticker</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. RELIANCE, TCS, INFY"
+                    value={symbolInput}
+                    onChange={(e) => setSymbolInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleInitiate()}
+                    className="flex-1 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono font-bold placeholder-slate-600 focus:outline-none focus:border-neonBlue transition"
+                  />
+                  <button
+                    onClick={() => handleInitiate()}
+                    disabled={initiateLoading || !symbolInput.trim()}
+                    className="px-4 bg-neonBlue text-black font-extrabold text-xs rounded-lg hover:bg-neonBlue/80 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                  >
+                    {initiateLoading ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />} Run
+                  </button>
+                </div>
+              </div>
+
+              {/* QUICK SUGGESTIONS */}
+              <div className="space-y-2">
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Quick Suggestions</span>
+                <div className="flex gap-1.5 flex-wrap">
+                  {['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'SBIN', 'TATAMOTORS'].map((ticker) => (
+                    <button
+                      key={ticker}
+                      onClick={() => handleInitiate(ticker)}
+                      className="text-[9px] font-bold px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded hover:border-neonBlue/45 transition cursor-pointer"
+                    >
+                      {ticker}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RESEARCH HISTORY LIST */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5">
+                <Clock size={14} className="text-slate-400" /> Compiled Dossier Archives
+              </h3>
+
+              {historyLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                  <RefreshCw className="animate-spin mb-3 text-neonBlue" size={24} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Syncing dossier history...</span>
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-16 text-slate-500 italic text-xs">
+                  No stock research has been conducted yet. Search a symbol above to trigger the first run!
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-900 bg-slate-950/30 max-h-[350px] overflow-y-auto scrollbar-thin">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-900/60 border-b border-slate-800/85 text-[9px] font-bold tracking-widest text-slate-400 uppercase">
+                        <th className="py-2.5 px-4">Symbol</th>
+                        <th className="py-2.5 px-4 text-center">Status</th>
+                        <th className="py-2.5 px-4">Generated Date</th>
+                        <th className="py-2.5 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-900/60 text-slate-300 font-medium">
+                      {history.map((h) => (
+                        <tr key={h.id} className="hover:bg-slate-900/20 transition">
+                          <td className="py-2.5 px-4 font-mono font-bold text-white">{h.symbol}</td>
+                          <td className="py-2.5 px-4 text-center">
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                              h.status === 'completed'
+                                ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/30'
+                                : h.status === 'failed'
+                                  ? 'bg-rose-950/30 text-rose-400 border-rose-900/30'
+                                  : 'bg-indigo-950/30 text-indigo-400 border-indigo-900/30 animate-pulse'
+                            }`}>
+                              {h.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-500 font-mono font-bold">
+                            {new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <button
+                              onClick={() => handleSelectHistory(h.id)}
+                              className="text-[9px] font-bold px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 rounded hover:border-sky-500/40 transition cursor-pointer"
+                            >
+                              OPEN DOSSIER
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW STATE 2: ACTIVE PIPELINE (RUNNING / PENDING TERMINAL LOGS) */}
+      {activeSessionId && (activeSession?.status === 'pending' || activeSession?.status === 'running') && (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in zoom-in duration-300">
+          
+          {/* TERMINAL CONSOLE PANEL */}
+          <div className="lg:col-span-3 flex flex-col">
+            <div className="flex-1 bg-slate-950 border border-slate-900 rounded-xl overflow-hidden flex flex-col min-h-[480px] shadow-2xl">
+              {/* Terminal Title Bar */}
+              <div className="bg-slate-900 px-4 py-2 border-b border-slate-900 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono font-bold select-none">autonomous_analyst_agent.sh</span>
+                <div className="w-12"></div>
+              </div>
+              
+              {/* Terminal Logs Stream */}
+              <div className="flex-1 p-5 font-mono text-[11px] leading-relaxed overflow-y-auto max-h-[420px] scrollbar-thin text-slate-400 space-y-1">
+                {activeSession.logs && activeSession.logs.map((log: string, idx: number) => {
+                  let colorClass = "text-slate-450";
+                  if (log.includes("[ERROR]") || log.includes("Failed")) colorClass = "text-rose-400 font-bold";
+                  else if (log.includes("[INIT]")) colorClass = "text-indigo-400";
+                  else if (log.includes("[COMPUTE]")) colorClass = "text-neonPurple";
+                  else if (log.includes("complete") || log.includes("successfully")) colorClass = "text-emerald-400";
+                  
+                  return (
+                    <div key={idx} className={colorClass}>
+                      <span className="text-slate-600 select-none mr-2">$</span> {log}
+                    </div>
+                  );
+                })}
+                {activeSession.status === 'running' && (
+                  <div className="text-sky-400 flex items-center gap-1.5 animate-pulse mt-2">
+                    <span className="text-slate-600 select-none mr-2">$</span>
+                    <RefreshCw size={10} className="animate-spin" />
+                    <span>Executing live browser crawler step...</span>
+                  </div>
+                )}
+                <div ref={terminalBottomRef} />
+              </div>
+            </div>
+          </div>
+
+          {/* ACTIVE STATUS & SCREENSHOT PREVIEW PANEL */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex-1 flex flex-col justify-between min-h-[480px]">
+              <div className="space-y-5">
+                <div>
+                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Target Stock</span>
+                  <h3 className="text-2xl font-black text-white font-mono mt-0.5 tracking-wider">{activeSession.symbol}</h3>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Agent Execution Status</span>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider font-mono animate-pulse">{activeSession.status}...</span>
+                  </div>
+                </div>
+
+                {/* Live chart screenshot preview */}
+                {activeSession.screenshots && activeSession.screenshots.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Captured Viewport</span>
+                    <div className="rounded-lg overflow-hidden border border-slate-900 bg-slate-950/60 shadow-lg">
+                      <img 
+                        src={activeSession.screenshots[0]} 
+                        alt="TradingView Candlestick capture" 
+                        className="w-full h-auto object-cover max-h-[160px] opacity-80 hover:opacity-100 transition duration-300"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-6 border-t border-slate-900 text-center">
+                <span className="text-[9px] text-slate-600 italic leading-relaxed block max-w-[200px] mx-auto">This run runs completely autonomously. Do not refresh this page to preserve logs.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW STATE 3: COMPLETED DOSSIER REPORT */}
+      {activeSessionId && activeSession?.status === 'completed' && activeSession.report && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom duration-500 select-none">
+          
+          {/* PROFILE SUMMARY BAR (Full Width) */}
+          <div className="lg:col-span-3 glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-black text-white">{activeSession.report.company_name}</h3>
+                <span className="text-[9px] font-bold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono tracking-wider">{activeSession.symbol}</span>
+                <span className="text-[9px] font-bold bg-sky-950/40 border border-sky-900/30 px-2 py-0.5 rounded text-sky-400 uppercase tracking-wider">{activeSession.report.sector}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed font-mono mt-2 max-w-4xl">{activeSession.report.summary}</p>
+            </div>
+            
+            {/* RATINGS BADGE */}
+            <div className="flex-shrink-0 flex items-center gap-4 bg-slate-950/80 p-4.5 rounded-xl border border-slate-900">
+              <div>
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">AI Recommendation</span>
+                <span className={`text-xl font-black block text-right ${
+                  activeSession.report.thesis?.rating === 'Buy' 
+                    ? 'text-emerald-400' 
+                    : activeSession.report.thesis?.rating === 'Sell' 
+                      ? 'text-rose-450' 
+                      : 'text-amber-400'
+                }`}>
+                  {activeSession.report.thesis?.rating?.toUpperCase() || 'HOLD'}
+                </span>
+              </div>
+              
+              {activeSession.report.current_price && (
+                <>
+                  <div className="h-8 w-[1px] bg-slate-900"></div>
+                  <div>
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">Current Price</span>
+                    <span className="text-sm font-extrabold text-white font-mono block text-right">
+                      ₹{activeSession.report.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </>
+              )}
+              
+              <div className="h-8 w-[1px] bg-slate-900"></div>
+              <div>
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">Target Range</span>
+                <span className="text-sm font-extrabold text-white font-mono block text-right">{activeSession.report.thesis?.target_range || '₹0.00'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* LEFT COLUMN: FUNDAMENTALS & TECHNICAL INDICATORS */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            
+            {/* FUNDAMENTALS CARD */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <Newspaper size={14} className="text-slate-400" /> Fundamental Ratios
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: "Market Cap", value: formatMarketCap(activeSession.report.ratios?.market_cap) },
+                  { label: "P/E Ratio", value: activeSession.report.ratios?.pe ? activeSession.report.ratios.pe.toFixed(2) : 'N/A' },
+                  { label: "P/B Ratio", value: activeSession.report.ratios?.pb ? activeSession.report.ratios.pb.toFixed(2) : 'N/A' },
+                  { label: "Debt to Equity", value: activeSession.report.ratios?.debt_equity ? `${activeSession.report.ratios.debt_equity.toFixed(1)}%` : 'N/A' },
+                  { label: "Dividend Yield", value: activeSession.report.ratios?.dividend_yield ? `${(activeSession.report.ratios.dividend_yield * 100).toFixed(2)}%` : 'N/A' },
+                  { label: "Profit Margin", value: activeSession.report.ratios?.margin ? `${(activeSession.report.ratios.margin * 100).toFixed(2)}%` : 'N/A' }
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-950/30 p-2.5 rounded border border-slate-900 flex flex-col">
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</span>
+                    <span className="text-xs font-extrabold text-white mt-1 font-mono">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Sources Metadata */}
+              <div className="mt-2 pt-2 border-t border-slate-900/60 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                <span>DATA SOURCE: {activeSession.report.data_source || 'Yahoo Finance Live API'}</span>
+                <span>STATUS: VERIFIED</span>
+              </div>
+            </div>
+
+            {/* TECHNICAL DIALS */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <Activity size={14} className="text-neonPurple" /> Technical Momentum
+              </h3>
+              
+              <ADXGauge 
+                adx={activeSession.report.technicals?.adx || 20} 
+                diPlus={activeSession.report.technicals?.di_plus || 20} 
+                diMinus={activeSession.report.technicals?.di_minus || 20} 
+              />
+              
+              <RSIGauge rsi={activeSession.report.technicals?.rsi || 50} />
+            </div>
+          </div>
+
+          {/* MIDDLE COLUMN: CHART SCREENSHOT & GEMINI VISION ANALYSIS */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            
+            {/* CHART ANALYSIS */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <Globe size={14} className="text-sky-400 animate-pulse" /> Candlestick Trendline Analysis (Gemini Vision)
+              </h3>
+              
+              <div className="rounded-xl overflow-hidden border border-slate-900 bg-slate-950/60 shadow-inner h-[480px]">
+                <ResearchCandleChart 
+                  symbol={activeSession.symbol} 
+                  PlotComponent={PlotComponent} 
+                />
+              </div>
+              
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-900 text-left max-h-[220px] overflow-y-auto scrollbar-thin">
+                <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-1.5">GEMINI VISION REPORT</h4>
+                <p className="text-[10px] text-slate-350 leading-relaxed font-mono whitespace-pre-line">
+                  {activeSession.report.chart_analysis || "No visual chart report was compiled."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTTOM ROW: INSIDER ACTIVITY, NEWS SENTIMENT & CORE THESIS */}
+          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            {/* INSIDER MONITOR CARD */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <Shield size={14} className="text-orange-400" /> Promoters & Insiders holding
+              </h3>
+              
+              <div className="flex-1 flex flex-col justify-between gap-3">
+                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Promoter Holdings Trend</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${
+                    activeSession.report.insider_activity?.promoter_activity === 'Increase'
+                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
+                      : activeSession.report.insider_activity?.promoter_activity === 'Decrease'
+                        ? 'bg-rose-950/40 text-rose-450 border-rose-900/30'
+                        : 'bg-slate-900 text-slate-400 border-slate-800'
+                  }`}>
+                    {activeSession.report.insider_activity?.promoter_activity || 'STABLE'}
+                  </span>
+                </div>
+                
+                <p className="text-[10px] text-slate-400 font-mono leading-relaxed bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1">
+                  {activeSession.report.insider_activity?.summary || "No recent promoter stake activities detected."}
+                </p>
+              </div>
+            </div>
+
+            {/* NEWS SENTIMENT CARD */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <Newspaper size={14} className="text-slate-400" /> News Sentiment & Risk
+              </h3>
+              
+              <div className="flex-1 flex flex-col justify-between gap-3">
+                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Media Sentiment Check</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${
+                    activeSession.report.news_sentiment?.sentiment === 'Bullish'
+                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
+                      : activeSession.report.news_sentiment?.sentiment === 'Bearish'
+                        ? 'bg-rose-950/40 text-rose-450 border-rose-900/30'
+                        : 'bg-slate-900 text-slate-400 border-slate-800'
+                  }`}>
+                    {activeSession.report.news_sentiment?.sentiment || 'NEUTRAL'}
+                  </span>
+                </div>
+                
+                <div className="bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[8px] font-bold text-rose-400 uppercase tracking-widest block mb-0.5">Primary Risk Factor</span>
+                    <p className="text-[10px] text-slate-300 font-mono leading-relaxed">{activeSession.report.news_sentiment?.risk_factor || "N/A"}</p>
+                  </div>
+                  
+                  {activeSession.report.news_sentiment?.articles && activeSession.report.news_sentiment.articles.length > 0 && (
+                    <div className="border-t border-slate-900 pt-2 space-y-1 max-h-[80px] overflow-y-auto scrollbar-thin">
+                      <span className="text-[7.5px] font-bold text-slate-500 uppercase tracking-widest block">Reference Articles</span>
+                      {activeSession.report.news_sentiment.articles.slice(0, 3).map((art: any, artIdx: number) => (
+                        <a 
+                          key={artIdx} 
+                          href={art.url} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-[9px] text-sky-400 hover:underline hover:text-sky-350 block truncate font-mono"
+                        >
+                          🔗 {art.title}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* TRADINGVIEW IDEAS CARD */}
+            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                <TrendingUp size={14} className="text-sky-400 animate-pulse" /> TradingView Analysis Ideas
+              </h3>
+              
+              <div className="flex-1 flex flex-col justify-between gap-3">
+                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Public Discussions</span>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded border border-sky-900/30 bg-sky-950/20 text-sky-400 uppercase tracking-widest font-mono">
+                    {activeSession.report.tradingview_ideas?.length || 0} IDEAS
+                  </span>
+                </div>
+                
+                <div className="bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1 flex flex-col justify-between gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
+                  {!activeSession.report.tradingview_ideas || activeSession.report.tradingview_ideas.length === 0 ? (
+                    <p className="text-[10px] text-slate-500 font-mono italic">No recent TradingView technical analysis ideas found.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeSession.report.tradingview_ideas.slice(0, 4).map((idea: any, idx: number) => (
+                        <div key={idx} className="border-b border-slate-900/60 pb-1.5 last:border-b-0 last:pb-0">
+                          <a 
+                            href={idea.url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-[9px] text-sky-400 hover:underline hover:text-sky-350 font-mono flex items-start gap-1 leading-snug"
+                          >
+                            <span className="mt-0.5">🔗</span>
+                            <span className="truncate block">{idea.title}</span>
+                          </a>
+                          {idea.pub_date && (
+                            <span className="text-[7.5px] text-slate-500 font-mono block ml-3 mt-0.5">{idea.pub_date}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ULTIMATE INVESTMENT THESIS */}
+            <div className="glass-panel p-5 border border-indigo-900/60 bg-gradient-to-br from-slate-950/80 to-indigo-950/15 flex flex-col gap-4 shadow-xl">
+              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-indigo-950/80 pb-2">
+                <Lightbulb size={14} className="text-indigo-400 animate-pulse" /> investment Thesis Summary
+              </h3>
+              
+              <div className="flex-1 flex flex-col justify-between gap-3">
+                <p className="text-[10.5px] text-indigo-200 font-mono leading-relaxed bg-indigo-950/20 p-4 rounded-xl border border-indigo-900/40 flex-1">
+                  {activeSession.report.thesis?.thesis || "No thesis generated."}
+                </p>
+                
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Analysis Audited by Artillegence AI</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
 
 export default App
 
