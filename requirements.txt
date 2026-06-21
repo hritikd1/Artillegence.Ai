@@ -19,3 +19,5 @@ PyJWT
 bcrypt
 python-multipart
 pyotp
+pandas
+nselib
