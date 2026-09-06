@@ -13,6 +13,8 @@ ANGEL_CLIENT_CODE = os.getenv("ANGEL_CLIENT_CODE", "")
 ANGEL_PIN = os.getenv("ANGEL_PIN", "")
 ANGEL_TOTP_SECRET = os.getenv("ANGEL_TOTP_SECRET", "")
 
+_scrip_map_cache = {}
+
 class AngelOneClient:
     def __init__(self):
         self.base_url = "https://apiconnect.angelone.in"
@@ -64,7 +66,8 @@ class AngelOneClient:
             response = requests.post(
                 f"{self.base_url}/rest/auth/angelbroking/user/v1/loginByPassword",
                 json=payload,
-                headers=self._get_headers(require_auth=False)
+                headers=self._get_headers(require_auth=False),
+                timeout=5.0
             )
             data = response.json()
             
@@ -92,6 +95,11 @@ class AngelOneClient:
 
     def load_scrip_master(self):
         """Download and cache the scrip master JSON from Angel One to map symbols to tokens."""
+        global _scrip_map_cache
+        if _scrip_map_cache:
+            self.scrip_map = _scrip_map_cache
+            return True
+
         if self.scrip_map:
             return True
             
@@ -101,7 +109,7 @@ class AngelOneClient:
         if not os.path.exists(cache_file):
             print("Downloading Angel One Scrip Master JSON...")
             try:
-                response = requests.get("https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json")
+                response = requests.get("https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json", timeout=10.0)
                 with open(cache_file, "wb") as f:
                     f.write(response.content)
             except Exception as e:
@@ -127,6 +135,7 @@ class AngelOneClient:
                     if sym.endswith("-EQ"):
                         base = sym[:-3]
                         self.scrip_map[f"{item['exch_seg']}:{base}"] = tok
+            _scrip_map_cache = self.scrip_map
             return True
         except Exception as e:
             print(f"Error loading scrip master: {e}")
@@ -184,7 +193,8 @@ class AngelOneClient:
             response = requests.post(
                 f"{self.base_url}/rest/secure/angelbroking/market/v1/quote/",
                 json=payload,
-                headers=self._get_headers()
+                headers=self._get_headers(),
+                timeout=5.0
             )
             data = response.json()
             

@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import LandingPage from './LandingPage.tsx'
 import Login from './Login.tsx'
+import { ToastProvider } from './Toast.tsx'
 
 interface Props {
   children: ReactNode;
@@ -152,14 +153,16 @@ class GlobalErrorBoundary extends Component<Props, State> {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalErrorBoundary>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<App />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<App />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </GlobalErrorBoundary>
   </StrictMode>,
 )

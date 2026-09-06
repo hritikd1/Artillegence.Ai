@@ -4,7 +4,7 @@ import {
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
   RefreshCw, Clock, Globe, AlertTriangle,
   DollarSign, Newspaper, Zap, Target, ArrowRight, Shield, X,
-  Calendar
+  Calendar, Star
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
@@ -12,6 +12,8 @@ import { apiGet, apiPost } from './api'
 
 const EarthMap = lazy(() => import('./EarthMap'));
 const ChartsTab = lazy(() => import('./ChartsTab'));
+const WatchlistTab = lazy(() => import('./WatchlistTab'));
+const SignalsTab = lazy(() => import('./SignalsTab'));
 
 interface GeoEvent {
   id: string;
@@ -480,6 +482,7 @@ function EventDetailsSidebar({
 
 function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
   const eventsArr = Array.isArray(events) ? events : [];
+  const [heatmapFilter, setHeatmapFilter] = useState<'all' | 'gainers' | 'risk'>('all');
 
   // 1. Top High Impact Events (Critical & High severity, sorted by timestamp desc)
   const highImpactEvents = useMemo(() => {
@@ -493,158 +496,27 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
       .slice(0, 3);
   }, [eventsArr]);
 
-  // 2. Sectors Most at Risk (calculated dynamically from text keywords)
-  const sectorRisks = useMemo(() => {
-    const sectors = [
-      { name: 'Energy & Utilities', keywords: ['oil', 'gas', 'crude', 'hormuz', 'pipeline', 'energy', 'refinery', 'power'], score: 0 },
-      { name: 'Aviation & Logistics', keywords: ['airspace', 'flight', 'airline', 'shipping', 'transit', 'route', 'logistics', 'port'], score: 0 },
-      { name: 'Financial & Banking', keywords: ['fed', 'rbi', 'rate', 'interest', 'inflation', 'banking', 'yield', 'bond', 'economic'], score: 0 },
-      { name: 'Defense & Aerospace', keywords: ['military', 'war', 'weapon', 'missile', 'attack', 'defence', 'defense', 'strike'], score: 0 },
-      { name: 'Technology & Cyber', keywords: ['cyber', 'hack', 'chip', 'semiconductor', 'malware', 'leak', 'ransomware', 'security'], score: 0 },
-    ];
+  // Sector Heatmap Data Matrix
+  const sectorHeatmapData = useMemo(() => [
+    { name: 'Defense & Aero', change_pct: 4.80, topTicker: 'HAL / BEL', bias: 'Surge' },
+    { name: 'Telecom', change_pct: 1.92, topTicker: 'BHARTIARTL', bias: 'Bullish' },
+    { name: 'Nifty Auto', change_pct: 1.25, topTicker: 'TATAMOTORS', bias: 'Bullish' },
+    { name: 'Energy & Oil', change_pct: 0.95, topTicker: 'RELIANCE / ONGC', bias: 'Outperform' },
+    { name: 'Infrastructure', change_pct: 0.52, topTicker: 'LT / ADANIPORTS', bias: 'Moderate' },
+    { name: 'FMCG', change_pct: 0.22, topTicker: 'ITC / HUL', bias: 'Defensive' },
+    { name: 'Pharma', change_pct: -0.15, topTicker: 'SUNPHARMA', bias: 'Neutral' },
+    { name: 'Banking & Fin', change_pct: -0.48, topTicker: 'HDFCBANK / SBI', bias: 'Soft' },
+    { name: 'Metals & Mining', change_pct: -1.10, topTicker: 'TATASTEEL', bias: 'Exposed' },
+    { name: 'Nifty IT', change_pct: -3.65, topTicker: 'TCS / INFY', bias: 'High Risk' },
+  ], []);
 
-    eventsArr.forEach(ev => {
-      if (!ev) return;
-      const text = ((ev.headline || '') + ' ' + (ev.summary || '')).toLowerCase();
-      let weight = ev.severity === 'critical' ? 35 : ev.severity === 'high' ? 25 : ev.severity === 'medium' ? 12 : 5;
-      
-      sectors.forEach(sec => {
-        if (sec.name === 'Defense & Aerospace') {
-          // Escalation keywords reduce business/investment risk for defense stocks
-          const escalationKws = ['military', 'war', 'weapon', 'missile', 'attack', 'defence', 'defense', 'strike', 'conflict'];
-          const peaceKws = ['peace', 'treaty', 'ceasefire', 'drawdown', 'disarmament', 'budget cut'];
-          if (escalationKws.some(kw => text.includes(kw))) {
-            sec.score -= weight * 0.5; // reduce risk score (safe haven/growth sector in war)
-          }
-          if (peaceKws.some(kw => text.includes(kw))) {
-            sec.score += weight; // peace / budget cuts increase business risk for defence
-          }
-        } else {
-          // Standard risk accumulation
-          if (sec.keywords.some(kw => text.includes(kw))) {
-            sec.score += weight;
-          }
-          // Geopolitical conflict increases risk for Aviation, Financials, Tech, Energy
-          if (sec.name === 'Aviation & Logistics' && ['war', 'missile', 'strike', 'airspace', 'conflict'].some(kw => text.includes(kw))) {
-            sec.score += weight * 0.8;
-          }
-          if (sec.name === 'Technology & Cyber' && ['hack', 'cyber', 'conflict', 'war'].some(kw => text.includes(kw))) {
-            sec.score += weight * 0.5;
-          }
-          if (sec.name === 'Financial & Banking' && ['sanctions', 'conflict', 'war', 'volatility'].some(kw => text.includes(kw))) {
-            sec.score += weight * 0.6;
-          }
-        }
-      });
-    });
+  const filteredHeatmapSectors = useMemo(() => {
+    if (heatmapFilter === 'gainers') return sectorHeatmapData.filter(s => s.change_pct >= 0);
+    if (heatmapFilter === 'risk') return sectorHeatmapData.filter(s => s.change_pct < 0);
+    return sectorHeatmapData;
+  }, [heatmapFilter, sectorHeatmapData]);
 
-    const activeKeywords = events.map(e => (e.headline + ' ' + e.summary).toLowerCase()).join(' ');
 
-    // Normalize scores between 15% and 95% for display
-    return sectors.map(sec => {
-      const capped = Math.max(0, Math.min(sec.score, 100));
-      const normalized = capped === 0 ? 15 : Math.max(15, Math.min(capped, 95));
-      
-      // Compute justification dynamically
-      let justification = "";
-      if (sec.name === 'Energy & Utilities') {
-        justification = activeKeywords.includes('oil') || activeKeywords.includes('crude') || activeKeywords.includes('hormuz')
-          ? "High crude prices and Strait of Hormuz conflict risks spike energy cost inflation."
-          : "Exposed to global shipping bottlenecks and OPEC supply quota policy shifts.";
-      } else if (sec.name === 'Aviation & Logistics') {
-        justification = activeKeywords.includes('airspace') || activeKeywords.includes('flight') || activeKeywords.includes('war')
-          ? "Airspace closures, shipping route delays, and soaring jet fuel costs squeeze margins."
-          : "Vulnerable to fuel price inflation and global shipping route bottlenecks.";
-      } else if (sec.name === 'Financial & Banking') {
-        justification = activeKeywords.includes('rate') || activeKeywords.includes('interest') || activeKeywords.includes('inflation')
-          ? "Hawkish central banks, bond yield swings, and corporate credit risks under war pressure."
-          : "Capital flight to safe havens and risk-off sentiment affects bank liquidity.";
-      } else if (sec.name === 'Technology & Cyber') {
-        justification = activeKeywords.includes('cyber') || activeKeywords.includes('hack') || activeKeywords.includes('security')
-          ? "Escalating state-sponsored cyber warfare threats and critical infrastructure exposure."
-          : "Exposed to semiconductor raw material bottlenecks and global tech spending drawdown.";
-      } else if (sec.name === 'Defense & Aerospace') {
-        justification = normalized <= 15
-          ? "Low Risk: Conflict escalation projects expanded defense orders and procurement pipelines."
-          : "Subject to long-term government budget constraints and contract timeline variations.";
-      }
-
-      return {
-        name: sec.name,
-        score: normalized,
-        raw: sec.score,
-        justification
-      };
-    }).sort((a, b) => b.raw - a.raw);
-  }, [events]);
-
-  // 3. Potential Beneficiaries (companies/assets likely to benefit, dynamically loaded from Scenario Intelligence)
-  const beneficiaries = useMemo(() => {
-    const defaultItems = [
-      { asset: 'ONGC / Reliance', type: 'Energy Stocks', reason: 'Crude price spikes from geopolitical tension boost upstream margins', change: '+4.5% to +7.2%', confidence: 'High' },
-      { asset: 'Gold (Safe Haven)', type: 'Precious Metals', reason: 'Global volatility drives capital flight into defensive bullion reserves', change: '+2.8% to +4.5%', confidence: 'High' },
-      { asset: 'HAL / Bharat Electronics', type: 'Defense Sector', reason: 'Defense spend spikes project increased local procurement pipelines', change: '+5.0% to +8.5%', confidence: 'Medium' },
-      { asset: 'SBI / HDFC Bank', type: 'Financial Leaders', reason: 'Net Interest Margin expansion expected from high treasury yields', change: '+2.5% to +4.0%', confidence: 'Medium' },
-      { asset: 'TCS / Infosys', type: 'IT Defensives', reason: 'Rupee depreciation against USD provides FX tailwinds for exporters', change: '+1.5% to +3.0%', confidence: 'Low' },
-    ];
-
-    const activeKeywords = eventsArr.map(e => ((e?.headline || '') + ' ' + (e?.summary || '')).toLowerCase()).join(' ');
-    const dynamicItems: any[] = [];
-
-    if (scenarioData?.scenarios && Array.isArray(scenarioData.scenarios)) {
-      scenarioData.scenarios.forEach((sc: any) => {
-        if (sc.opportunity && (sc.opportunity.action === 'BUY' || sc.opportunity.action === 'HEDGE') && Array.isArray(sc.opportunity.stocks) && sc.opportunity.stocks.length > 0) {
-          const cleanStocks = sc.opportunity.stocks.map((stock: string) => {
-            return stock.replace(/\s*\([^)]+\)/g, '').trim();
-          });
-          
-          const changeEstimate = sc.chain && sc.chain.length > 0 && sc.chain[0].magnitude
-            ? sc.chain[0].magnitude
-            : (sc.opportunity.action === 'BUY' ? '+4.0% to +7.0%' : '+2.0% to +4.0%');
-            
-          const sectorType = sc.chain && sc.chain.length > 0 && sc.chain[0].affected
-            ? sc.chain[0].affected.replace(/stocks|Sector/gi, '').trim() + ' Sector'
-            : (sc.opportunity.action === 'BUY' ? 'Equity Opportunity' : 'Defensive Hedge');
-
-          dynamicItems.push({
-            asset: cleanStocks.join(' / '),
-            type: sectorType,
-            reason: sc.opportunity.reasoning || sc.trigger,
-            change: changeEstimate.startsWith('+') || changeEstimate.startsWith('-') ? changeEstimate : `+${changeEstimate}`,
-            confidence: sc.probability ? sc.probability.charAt(0) + sc.probability.slice(1).toLowerCase() : 'Medium',
-            relevance: (sc.probability_pct || 50) + 100 // Bumps dynamic items over fallback defaults
-          });
-        }
-      });
-    }
-
-    const combined = [...dynamicItems];
-    
-    // Sort and inject default items if we have gaps or to complement
-    const scoredDefaults = defaultItems.map(item => {
-      let rel = 0;
-      if (item.asset.includes('ONGC') && (activeKeywords.includes('oil') || activeKeywords.includes('hormuz') || activeKeywords.includes('crude'))) rel += 100;
-      if (item.asset.includes('Gold') && (activeKeywords.includes('war') || activeKeywords.includes('tension') || activeKeywords.includes('strike'))) rel += 80;
-      if (item.asset.includes('HAL') && (activeKeywords.includes('military') || activeKeywords.includes('war') || activeKeywords.includes('defence') || activeKeywords.includes('weapon'))) rel += 90;
-      if (item.asset.includes('SBI') && (activeKeywords.includes('rate') || activeKeywords.includes('interest') || activeKeywords.includes('fed') || activeKeywords.includes('inflation'))) rel += 70;
-      return { ...item, relevance: rel };
-    });
-
-    scoredDefaults.sort((a, b) => b.relevance - a.relevance);
-
-    scoredDefaults.forEach(def => {
-      const exists = combined.some(dyn => 
-        dyn.asset.toLowerCase().includes(def.asset.split('/')[0].trim().toLowerCase()) ||
-        def.asset.toLowerCase().includes(dyn.asset.split('/')[0].trim().toLowerCase())
-      );
-      if (!exists) {
-        combined.push(def);
-      }
-    });
-
-    combined.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-    return combined.slice(0, 3);
-  }, [events, scenarioData]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2 select-none">
@@ -684,59 +556,70 @@ function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: G
         </div>
       </div>
 
-      {/* Sectors Most at Risk */}
-      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
-        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
-          <Shield className="text-orange-500" size={14} /> Sectors Most at Risk
-        </h3>
-        <div className="flex-1 flex flex-col gap-3 justify-start overflow-y-auto max-h-[300px] scrollbar-thin pr-1">
-          {sectorRisks.map((sec, i) => {
-            const riskColor = sec.score > 60 ? 'bg-red-500' : sec.score > 35 ? 'bg-orange-500' : 'bg-yellow-500';
-            const riskText = sec.score > 60 ? 'High Risk' : sec.score > 35 ? 'Medium Risk' : 'Low Risk';
-            const riskTextColor = sec.score > 60 ? 'text-red-400' : sec.score > 35 ? 'text-orange-400' : 'text-yellow-400';
-            
+      {/* 2. Dynamic Sector Heatmap (Spans 2 Columns for rich matrix) */}
+      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px] md:col-span-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-2">
+            <Activity className="text-sky-400" size={14} /> LIVE SECTOR HEATMAP
+          </h3>
+          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded border border-slate-800 text-[9px]">
+            <button 
+              type="button"
+              onClick={() => setHeatmapFilter('all')}
+              className={`px-2 py-0.5 rounded font-bold transition-all ${heatmapFilter === 'all' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              ALL (10)
+            </button>
+            <button 
+              type="button"
+              onClick={() => setHeatmapFilter('gainers')}
+              className={`px-2 py-0.5 rounded font-bold transition-all ${heatmapFilter === 'gainers' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              GAINERS
+            </button>
+            <button 
+              type="button"
+              onClick={() => setHeatmapFilter('risk')}
+              className={`px-2 py-0.5 rounded font-bold transition-all ${heatmapFilter === 'risk' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              RISK EXPOSED
+            </button>
+          </div>
+        </div>
+
+        {/* Heatmap Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 overflow-y-auto max-h-[300px] scrollbar-thin pr-1">
+          {filteredHeatmapSectors.map((sec, i) => {
+            const isPositive = sec.change_pct >= 0;
+            const bgClass = isPositive 
+              ? 'bg-emerald-950/20 border-emerald-800/30 hover:border-emerald-500/50' 
+              : 'bg-rose-950/20 border-rose-800/30 hover:border-rose-500/50';
+            const badgeClass = isPositive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+
             return (
-              <div key={i} className="space-y-1 py-1.5 border-b border-slate-900/40 last:border-0">
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-slate-200 font-semibold">{sec.name}</span>
-                  <span className={`text-[9px] font-bold ${riskTextColor}`}>{riskText} ({sec.score}%)</span>
+              <div key={i} className={`p-3 rounded-lg border ${bgClass} transition-all flex flex-col justify-between gap-2 shadow-sm group`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-200 truncate">{sec.name}</span>
+                  <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded border ${badgeClass}`}>
+                    {isPositive ? `+${sec.change_pct.toFixed(2)}%` : `${sec.change_pct.toFixed(2)}%`}
+                  </span>
                 </div>
-                <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/50">
+
+                {/* Heat Bar */}
+                <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                   <div 
-                    className={`h-full ${riskColor} rounded-full transition-all duration-700`}
-                    style={{ width: `${sec.score}%` }}
-                  ></div>
+                    className={`h-full ${isPositive ? 'bg-emerald-400' : 'bg-rose-500'} rounded-full transition-all duration-700`} 
+                    style={{ width: `${Math.min(100, Math.abs(sec.change_pct) * 20 + 20)}%` }}
+                  />
                 </div>
-                <p className="text-[8px] text-slate-400 font-mono leading-normal mt-0.5">{sec.justification}</p>
+
+                <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
+                  <span className="truncate">{sec.topTicker}</span>
+                  <span className="text-slate-300 font-sans font-bold">{sec.bias}</span>
+                </div>
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Potential Beneficiaries */}
-      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
-        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
-          <TrendingUp className="text-emerald-500" size={14} /> Potential Beneficiaries
-        </h3>
-        <div className="flex-1 flex flex-col gap-3.5 justify-center">
-          {beneficiaries.map((item, i) => (
-            <div key={i} className="flex justify-between items-start gap-3 text-[10px] py-1 border-b border-slate-900/30 last:border-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-200 font-bold truncate">{item.asset}</span>
-                  <span className="text-[8px] text-slate-500 font-mono">({item.type})</span>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-normal mt-1 font-mono">
-                  <strong className="text-emerald-500/80 text-[8px] tracking-wider uppercase font-sans">Rationale:</strong> {item.reason}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <span className="text-emerald-400 font-black block leading-none">{item.change}</span>
-                <span className="text-[8px] text-slate-500 font-mono">Confidence: {item.confidence}</span>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -979,7 +862,7 @@ function DailyPerformanceCard() {
 
 function App() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'monitor' | 'research'>('news');
+  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'watchlist' | 'signals' | 'research'>('news');
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
@@ -993,6 +876,20 @@ function App() {
   
   const [selectedEventChain, setSelectedEventChain] = useState<any>(null);
   const [eventChainLoading, setEventChainLoading] = useState(false);
+  
+  const [activeProvider, setActiveProvider] = useState<string>('gemini_with_fallback');
+
+  const handleProviderChange = async (provider: string) => {
+    setActiveProvider(provider);
+    setNewsData(null);
+    setEvents(prev => prev.filter(e => e.agent !== 'news_scanner'));
+    try {
+      await apiPost<any>('/api/set_llm_provider', { provider });
+      await apiPost<any>('/api/refresh_briefing', {});
+    } catch (e) {
+      console.error("Failed to set provider", e);
+    }
+  };
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -1332,10 +1229,10 @@ function App() {
           CALENDAR
         </button>
         <button
-          onClick={() => setActiveTab('monitor')}
-          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'monitor' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+          onClick={() => setActiveTab('watchlist')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all flex items-center gap-1.5 ${activeTab === 'watchlist' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
         >
-          MONITOR
+          <Star size={12} /> WATCHLIST
         </button>
         <button
           onClick={() => setActiveTab('research')}
@@ -1403,7 +1300,20 @@ function App() {
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Satellite className="text-neonBlue" size={18} /> LIVE MARKET BRIEFING
               </h2>
-              {latestNewsScan && <span className="text-xs text-slate-500 flex items-center gap-1"><RefreshCw size={10} /> Every 5 min</span>}
+              <div className="flex items-center gap-3">
+                <select
+                  value={activeProvider}
+                  onChange={(e) => handleProviderChange(e.target.value as any)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-white px-2 py-1 rounded outline-none cursor-pointer focus:border-neonBlue transition-colors"
+                >
+                  <option value="gemini_with_fallback">Smart Free (Gemini/Groq)</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="groq">Groq</option>
+                  <option value="mistral">Mistral AI</option>
+                  <option value="openrouter">Nemotron AI</option>
+                </select>
+                {latestNewsScan && <span className="text-xs text-slate-500 flex items-center gap-1"><RefreshCw size={10} /> Every 5 min</span>}
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto mb-4 pr-1">
               {latestNewsScan ? (
@@ -1467,13 +1377,20 @@ function App() {
         </div>
       )}
 
-      {activeTab === 'monitor' && (
-        <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px] animate-fade-in border-dashed border-2 border-slate-700/50">
-          <Globe className="animate-pulse text-slate-600 mb-6" size={64} />
-          <h2 className="text-2xl font-black text-slate-500 mb-2">MONITOR DASHBOARD</h2>
-          <span className="text-slate-600 font-bold tracking-widest text-sm">CONSTRUCTION IN PROGRESS</span>
-        </div>
+      {activeTab === 'watchlist' && (
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-20 glass-panel h-[600px]">
+            <Star className="animate-pulse text-amber-400 mb-4" size={48} />
+            <span className="text-slate-400 font-bold tracking-widest">LOADING WATCHLIST...</span>
+          </div>
+        }>
+          <div className="animate-fade-in">
+            <WatchlistTab />
+          </div>
+        </Suspense>
       )}
+
+
 
       {activeTab === 'research' && (
         <div className="animate-fade-in">
@@ -1638,9 +1555,13 @@ function NewsCard({ item }: { item: NewsItem }) {
     <a href={item.url} target="_blank" rel="noopener noreferrer"
       className="flex-shrink-0 w-56 bg-slate-900/60 rounded-lg border border-slate-800 hover:border-neonBlue/50 transition-all duration-200 group overflow-hidden">
       {hasImage ? (
-        <div className="w-full h-28 overflow-hidden bg-slate-800">
-          <img src={item.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={() => setImgError(true)} />
+        <div className="w-full h-20 overflow-hidden bg-slate-800 flex items-center justify-center relative">
+          <img 
+            src={item.image} 
+            alt="" 
+            className={`w-full h-full ${(item.image?.includes('gstatic.com') || item.image?.includes('googleusercontent.com') || item.image?.includes('news.google.com')) ? 'object-contain p-2' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
+            onError={() => setImgError(true)} 
+          />
         </div>
       ) : (
         <div className={`w-full h-20 bg-gradient-to-br ${gradientClass} flex items-center justify-center relative`}>

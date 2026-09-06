@@ -1,96 +1,197 @@
-# Telegram News Monitor
+# Artillegence AI — Indian Stock Market Intelligence Platform
 
-## Setup Instructions
+Autonomous multi-agent system that monitors news, Telegram intel, Google Trends, and economic calendars to generate real-time market insights for Indian stocks.
 
-1. First, obtain your Telegram API credentials:
-   - Visit https://my.telegram.org/apps
-   - Create a new application
-   - Note down your API_ID and API_HASH
+## Quick Start
 
-2. Create a `.env` file in the project root with the following variables:
-   ```
-   API_ID=your_api_id
-   API_HASH=your_api_hash
-   MONITORED_GROUPS=group1,group2
-   MISTRAL_API_KEY=your_mistral_api_key
-   ADMIN_CHAT_ID=your_chat_id
-   ```
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Configure Environment
+```bash
+cp .env.template .env
+```
 
-4. Run the monitor:
-   ```bash
-   python group_monitor.py
-   ```
+Edit `.env` and set:
+- `LLM_PROVIDER=mistral` (or `ollama`, `groq`, `gemini`)
+- Required API keys for your chosen provider
+- `JWT_SECRET_KEY` — any strong random string
 
-## First-time Authentication
-
-When running the monitor for the first time, you'll need to authenticate with Telegram:
-
-1. The script will prompt for your phone number
-2. Enter your phone number with country code (e.g., +1234567890)
-3. You'll receive a verification code via Telegram
-4. Enter the code when prompted
-
-After successful authentication, your session will be saved and you won't need to authenticate again.
-
-## Monitoring Groups
-
-Specify the groups to monitor in the MONITORED_GROUPS environment variable. You can use:
-- Group usernames (e.g., @groupname)
-- Group invite links (e.g., https://t.me/groupname)
-- Multiple groups separated by commas
-
-## Troubleshooting
-
-- If you get a "phone number invalid" error, make sure to include the country code
-- If authentication fails, delete the `*.session` file and try again
-- For group access issues, ensure you're a member of the groups you want to monitor with GPT Analysis
-
-This application monitors Telegram news channels, analyzes messages using GPT, and provides market-related insights and recommendations.
-
-## Features
-
-- Monitors specified Telegram news channels
-- Analyzes news content using GPT-4
-- Generates summaries and market action recommendations
-- Stores analysis results in SQLite database
-- Optional notifications to admin via Telegram
-
-## Setup
-
-1. Install required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. Configure environment variables:
-   - Copy `.env.example` to `.env`
-   - Add your Telegram Bot Token (get from @BotFather)
-   - Add your OpenAI API Key
-   - (Optional) Add your Telegram Chat ID for receiving analysis
-
-3. Add the bot to your target news channels as an administrator
-
-## Running the Application
-
+### 3. Run
 ```bash
 python main.py
 ```
 
-## Database
+Access:
+- API: http://localhost:8000
+- Dashboard: http://localhost:3000 (frontend)
 
-The application stores all analyses in `news_analysis.db` with the following information:
-- Original message
-- Summary
-- Recommended market action
-- Timestamp
+---
 
-## Note
+## LLM Provider Options
 
-Ensure your bot has the following permissions in the target channels:
-- Read messages
-- Read channel history
+Set `LLM_PROVIDER` in `.env` to choose your AI backend:
+
+### Mistral (default)
+- Requires `MISTRAL_API_KEY`
+- Get key at https://console.mistral.ai/
+- Free tier: ~1 request/sec, generous limits
+
+### Ollama (Local — Zero Cost, No Limits) ⭐ Recommended for minimum specs
+- Runs entirely on your machine — no API keys needed
+- Zero rate limits, zero cost, complete privacy
+- **Minimum hardware**: 4GB RAM (runs `phi3:mini` smoothly)
+- **Setup**:
+  ```bash
+  # Install Ollama from https://ollama.ai
+  ollama pull phi3:mini
+  # For better quality (needs ~6GB RAM):
+  ollama pull mistral:7b
+  ```
+- Set `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=phi3:mini` in `.env`
+
+### Groq (Cloud — Ultra Fast)
+- Requires `GROQ_API_KEY`
+- Get key at https://console.groq.com/
+- Free tier: 30 req/min, 14,400 req/day
+- 300+ tokens/sec — fastest cloud inference
+- Set `LLM_PROVIDER=groq`
+
+### Gemini (Google — Generous Free Tier)
+- Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- Get key at https://aistudio.google.com/app/apikey
+- Free tier: 15 RPM, 1M tokens/min
+- Set `LLM_PROVIDER=gemini`
+
+### NVIDIA NIM (Cloud — Works on 500MB servers) ⭐ Recommended for low-spec servers
+- Requires `NVIDIA_API_KEY`
+- Get key at https://build.nvidia.com
+- Zero local resource usage — all inference runs on NVIDIA servers
+- OpenAI-compatible API, supports vision models for chart analysis
+- Free tier available
+- Recommended models:
+  - `z-ai/glm-5.2` — supports vision, great for chart screenshots
+  - `meta/llama-3.2-90b-vision-instruct` — vision-capable
+  - `meta/llama-3.1-70b-versatile` — text only
+- Set `LLM_PROVIDER=nvidia` and `NVIDIA_MODEL=z-ai/glm-5.2` in `.env`
+- Set `VISION_MODEL=z-ai/glm-5.2` for chart analysis
+
+---
+
+## Switching Providers
+
+To switch LLM providers, just change one line in `.env`:
+```bash
+LLM_PROVIDER=ollama   # local, free, no limits
+LLM_PROVIDER=mistral  # cloud, high quality
+LLM_PROVIDER=groq     # cloud, ultra fast
+LLM_PROVIDER=gemini   # cloud, generous free tier
+```
+
+The system automatically maps model names across providers, so no code changes are needed.
+
+---
+
+## Architecture
+
+| Component | Technology |
+|-----------|-----------|
+| Backend API | FastAPI + WebSocket |
+| Frontend | React + Vite + Plotly |
+| Database | SQLite (WAL mode) |
+| Auth | JWT + bcrypt |
+| LLM | Pluggable (Mistral / Ollama / Groq / Gemini) |
+| Scraping | feedparser, Scrapling, Playwright, pytrends |
+| Live Data | yfinance, Angel One API, NSElib |
+
+## Agents
+
+| Agent | Frequency | Purpose |
+|-------|-----------|---------|
+| News Scanner | 5 min | Aggregates Bing/Google/CNBC/Moneycontrol/ET feeds |
+| Market Analyzer | 30 min | 6-section deep analysis (sentiment, sectors, FII/DII, commodities) |
+| Opportunity Finder | 30 min | BUY/AVOID stock opportunities from news |
+| Trending Tracker | 15 min | Market movers and trending topics |
+| Indian Market Tracker | 10 min | Live Nifty/Sensex/Bank Nifty updates |
+| Telegram Scanner | 5 min | Geo-intel from Telegram channels |
+| Visual Researcher | 20 min | Autonomous screenshot + vision analysis |
+| Google News Scanner | 10 min | Rotating topic-based news briefs |
+| Google Trends | 20 min | Search spike detection for sentiment |
+| Website Scanner | 60 min | User-added web sources |
+| Economic Calendar | 60 min | NSE corporate actions/events |
+| Scenario Intelligence | 15 min | IF→THEN investment scenarios |
+
+## Database Schema
+
+- `intelligence_cache` — latest output per agent
+- `geo_events` — persistent geo-tagged events for EarthMap
+- `signal_log` — AI signal accuracy tracking
+- `agent_memory` — rolling context summaries per agent
+- `custom_sources` — user-added Telegram/Web sources
+- `user_custom_searches` — user watchlist topics
+- `stock_research` — async research session logs/reports
+
+## API Endpoints
+
+```
+POST /api/auth/login       — JWT login
+POST /api/auth/register    — Create user
+
+GET  /api/market/analysis  — Latest market analysis
+GET  /api/market/performance — Sector/stock performance
+GET  /api/opportunities    — Investment opportunities
+GET  /api/trending         — Trending stocks/topics
+GET  /api/telegram/status  — Telegram intel feed
+GET  /api/news/status      — News scanner output
+GET  /api/indian-market    — Indian market tracker
+GET  /api/geo/events       — Geo-tagged events for map
+GET  /api/economic-calendar — NSE corporate actions
+GET  /api/google-trends    — Google Trends intelligence
+GET  /api/scenarios        — AI-generated scenarios
+GET  /api/signals          — Signal accuracy scorecard
+
+POST /api/analyze_impact   — Geopolitical event → market thesis
+POST /api/custom_search    — One-off LLM search + monitoring
+POST /api/stock_forecast   — Pattern-matching price forecast
+POST /api/stock_analysis   — Full stock thesis with news
+POST /api/claude_chart_analysis — Chart screenshot → technical analysis
+POST /api/chat             — Multimodal AI chat (vision + text)
+POST /api/add_intel_source — Add Telegram/Web to background scanner
+POST /api/research/initiate — Start async stock research pipeline
+
+WS   /ws                   — Real-time agent broadcasts
+```
+
+## Deployment
+
+### Local Development
+```bash
+python main.py
+```
+
+### Render
+- Uses `render.yaml` for web service
+- Persistent disk at `/data` for SQLite DB
+- Set env vars in Render dashboard
+
+## Troubleshooting
+
+**Ollama not connecting?**
+```bash
+# Verify Ollama is running
+ollama list
+# Test API
+curl http://localhost:11434/api/tags
+```
+
+**Mistral rate limits?**
+Switch to `LLM_PROVIDER=ollama` or `LLM_PROVIDER=groq` for free unlimited inference.
+
+**Frontend not loading?**
+```bash
+cd frontend
+npm install
+npm run dev
+```

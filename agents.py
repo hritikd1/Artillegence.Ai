@@ -2,10 +2,10 @@ import os
 import asyncio
 import json
 import re
-import aiohttp
 import time
 from datetime import datetime
 from dotenv import load_dotenv
+import aiohttp
 
 from core_scrapers import GoogleRSSFeed, GoogleNewsScraper, GOOGLE_NEWS_TOPICS, TelegramChannelScraper, GoogleTrendsScraper
 from llm_analyzer import MistralAnalyzer
@@ -13,15 +13,9 @@ import database as db
 
 load_dotenv()
 
-MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
-MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
-
 # Dynamic Port for Render internal communication
 API_PORT = os.getenv("PORT", "8000")
 BASE_API_URL = f"http://localhost:{API_PORT}"
-
-if not MISTRAL_API_KEY:
-    print("  [AUTH] WARNING: MISTRAL_API_KEY is missing! Set it in your Render Environment Variables.")
 
 #  Utility 
 
@@ -37,8 +31,9 @@ def strip_markdown(text: str) -> str:
     return text.strip()
 
 
-async def call_mistral(prompt: str, system_msg: str | None = None, retries=3) -> str:
-    """Call Mistral AI with automatic retries and rate-limit protection."""
+async def call_mistral(prompt: str, system_msg: str | None = None, retries=5) -> str:
+    """Call Mistral AI with automatic retries and rate-limit protection using a shared lock."""
+    from llm_analyzer import call_mistral_raw
     default_system = (
         f"Today's date is {datetime.now().strftime('%A, %B %d, %Y')}. "
         "You are an expert Indian stock market analyst. "
@@ -47,38 +42,19 @@ async def call_mistral(prompt: str, system_msg: str | None = None, retries=3) ->
         "2) Write in clean plain text. "
         "3) Cite headlines."
     )
+    payload = {
+        'model': 'mistral-large-latest',
+        'messages': [
+            {'role': 'system', 'content': system_msg or default_system},
+            {'role': 'user', 'content': prompt}
+        ]
+    }
     
-    for attempt in range(retries):
-        try:
-            headers = {
-                'Authorization': f'Bearer {MISTRAL_API_KEY}',
-                'Content-Type': 'application/json'
-            }
-            payload = {
-                'model': 'mistral-large-latest',
-                'messages': [
-                    {'role': 'system', 'content': system_msg or default_system},
-                    {'role': 'user', 'content': prompt}
-                ]
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(MISTRAL_API_URL, headers=headers, json=payload, timeout=45) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        raw = data['choices'][0]['message']['content']
-                        return strip_markdown(raw)
-                    elif resp.status == 429:
-                        wait = (attempt + 1) * 5
-                        print(f"   [RATE LIMIT] Mistral busy. Retrying in {wait}s...")
-                        await asyncio.sleep(wait)
-                        continue
-                    else:
-                        error = await resp.text()
-                        return f"API error ({resp.status}): {error[:200]}"
-        except Exception as e:
-            if attempt == retries - 1:
-                return f"Analysis unavailable: {e}"
-            await asyncio.sleep(2)
+    res = await call_mistral_raw(payload, retries=retries)
+    if isinstance(res, dict):
+        if 'choices' in res:
+            raw = res['choices'][0]['message']['content']
+            return strip_markdown(raw)
     return "Analysis timed out after retries."
 
 
@@ -363,7 +339,7 @@ async def fetch_rss(topics: list, limit=5, hours=6) -> list:
     return articles
 
 
-async def fetch_google_news(topics: list, limit=5, hours=6) -> list:
+async def fetch_google_news(topics: list, limit=3, hours=6) -> list:
     """Fetch news from Google News RSS (news.google.com). Default: 6 h freshness."""
     articles = []
     for name, query in topics:
@@ -376,7 +352,7 @@ async def fetch_google_news(topics: list, limit=5, hours=6) -> list:
     return articles
 
 
-async def fetch_google_news_topics(topic_keys: list, limit=10, hours=6) -> list:
+async def fetch_google_news_topics(topic_keys: list, limit=3, hours=6) -> list:
     """Fetch from Google News built-in topic sections (top_stories, business, etc.). Default: 6 h."""
     articles = []
     for key in topic_keys:
@@ -541,7 +517,7 @@ async def news_scanner_cycle():
     gn_top = await fetch_google_news_topics(["top_stories", "india", "business"], limit=10, hours=8)
     
     all_articles = bing_articles + gn_articles + aj_articles + gn_articles_extra + cnbc_articles + mc_articles + et_articles + gn_top
-    unique = deduplicate(all_articles)[:40]
+    unique = deduplicate(all_articles)[:15]
 
     if not unique:
         print("   No articles found")
@@ -562,6 +538,11 @@ Headlines:
 IMPORTANT: Only reference information from these headlines. Do not use your training data. Write in plain text, no markdown."""
 
     summary = await call_mistral(prompt)
+
+    # Don't save/broadcast if LLM timed out
+    if not summary or summary.strip().startswith("Analysis timed out"):
+        print("   [NEWS SCANNER] LLM timed out, skipping broadcast")
+        return
 
     from core_scrapers import WebScraper
     
@@ -871,20 +852,31 @@ async def indian_market_tracker_cycle():
 
     # Inject memory context
     memory_ctx = db.build_memory_context("indian_market_tracker")
-    prompt = f"""Based on these headlines, give a live Indian market update.
-{memory_ctx}
+    prompt = f"""Based on the following headlines, generate a DETAILED live Indian market update.
+
+Headlines:
 {headlines}
 
-Structure:
-MARKET SNAPSHOT: Nifty/Sensex direction and key levels (cite headlines)
-STOCKS IN FOCUS: 5 specific stocks making moves (cite headlines)
-SECTOR HEAT: Which sectors are hot (green) and cold (red)
-FII/DII: Institutional activity
-RUPEE: Currency movement
+{memory_ctx}
 
-IMPORTANT: Only cite these headlines. Write in plain text, no markdown."""
+CRITICAL INSTRUCTIONS:
+You MUST use EXACTLY this structure with these exact headers in all capital letters. Do not write a generic introduction. Do not write a generic conclusion.
+
+MARKET SNAPSHOT: (Write 2-3 sentences about Nifty/Sensex direction citing specific headlines)
+STOCKS IN FOCUS: (List specific stocks and why they are moving citing headlines)
+SECTOR HEAT: (Identify which sectors are hot/green and cold/red based on headlines)
+FII/DII: (Summarize institutional activity if mentioned)
+RUPEE: (Summarize currency movement if mentioned)
+
+Start your response immediately with "MARKET SNAPSHOT:"."""
 
     analysis = await call_mistral(prompt)
+
+    # Don't save/broadcast if LLM timed out
+    if not analysis or analysis.strip().startswith("Analysis timed out"):
+        print("   [INDIAN MARKET TRACKER] LLM timed out, skipping broadcast")
+        return
+
     db.append_agent_memory("indian_market_tracker", analysis[:600])
     sources = make_source_list(unique, limit=5)
 
@@ -978,7 +970,35 @@ async def telegram_scanner_cycle():
                 mistral_data = json.loads(clean_json)
             except Exception as e:
                 print(f"   Error parsing Mistral JSON: {e}")
-                
+
+        # ── Save Telegram geo events to DB so they appear on the map ──
+        geo_events_to_save = []
+        post_map = {a.get('telegram_post_id', ''): a for a in tg_data if a.get('telegram_post_id')}
+        for result in mistral_data.get("results", []):
+            post_id = result.get("id", "")
+            post = post_map.get(post_id, {})
+            for loc in result.get("locations", []):
+                eid = f"tg-{post_id}-{loc.get('name','').replace(' ','_')[:12]}"
+                geo_events_to_save.append({
+                    "id": eid,
+                    "lat": loc.get("lat", 0),
+                    "lng": loc.get("lng", 0),
+                    "city": loc.get("name", ""),
+                    "country": "",
+                    "headline": post.get("title", loc.get("name", "Telegram Intel")),
+                    "summary": post.get("snippet", "")[:300],
+                    "source": "Telegram",
+                    "url": post.get("link", ""),
+                    "severity": "medium",
+                    "timestamp": post.get("timestamp", datetime.now().isoformat()),
+                    "section": "telegram",
+                    "category": "Geopolitics & Telegram",
+                    "telegram_post_id": post_id,
+                })
+        if geo_events_to_save:
+            db.save_geo_events(geo_events_to_save)
+            print(f"   [TELEGRAM] Saved {len(geo_events_to_save)} geo events to map")
+
         # To maintain backwards compatibility of the payload (or if needed), we could join snippets as summary
         combined_text = " | ".join([a.get('snippet', '') for a in tg_data])
         
@@ -1049,6 +1069,64 @@ async def visual_research_cycle():
         print(f"[VISUAL RESEARCH] Intelligence logged to EarthMap.")
     except Exception as e:
         print(f" Visual Research Error: {e}")
+
+# 
+# AGENT 13: Continuous News Scanner (every 2 min)
+# 
+async def continuous_news_agent_cycle():
+    """Dedicated agent that continuously scans highly volatile categories like Indian News and Global Macro."""
+    print("\n [CONTINUOUS NEWS] Fetching highly volatile intelligence (Indian News & Global Macro)...")
+    
+    topics = [
+        ("Indian News", "Indian local news today latest updates"),
+        ("Global Macro", "global macroeconomics central banks interest rates")
+    ]
+    
+    gn_search = await fetch_google_news(topics, limit=5, hours=2)
+    gn_sections = await fetch_google_news_topics(
+        ["top_stories", "india", "business"],
+        limit=5, hours=2
+    )
+    
+    all_articles = gn_search + gn_sections
+    unique = deduplicate(all_articles)[:15]
+
+    if not unique:
+        print("   No fresh articles found for continuous monitor.")
+        return
+
+    import hashlib
+    geo_events_to_save = []
+    for a in unique:
+        # Default tag to India/Mumbai for mapping generic Indian news if no specific location is found
+        geo_ev = {
+            "id": hashlib.md5(a['link'].encode()).hexdigest(),
+            "lat": 19.0760,  
+            "lng": 72.8777,
+            "city": "Mumbai",
+            "country": "India",
+            "headline": a['title'],
+            "summary": a.get('snippet', '')[:200],
+            "source": a.get('source', 'Google News'),
+            "url": a.get('link', ''),
+            "severity": "high",
+            "timestamp": a.get('timestamp', datetime.now().isoformat()),
+            "category": "indian_news" if "india" in a['link'].lower() else "global_macro"
+        }
+        geo_events_to_save.append(geo_ev)
+        
+    db.save_geo_events(geo_events_to_save)
+    
+    for ev in geo_events_to_save:
+        await broadcast({
+            "agent": "continuous_news_agent",
+            "title": ev['headline'],
+            "summary": ev['summary'],
+            "url": ev['url'],
+            "timestamp": ev['timestamp']
+        })
+        
+    print(f"   [CONTINUOUS NEWS] Added {len(geo_events_to_save)} rapid intel items.")
 
 # 
 # AGENT 7: Google News Scanner (every 10 min)
@@ -1382,10 +1460,7 @@ Return this EXACT JSON structure:
 
 CRITICAL: Scenarios must be based ONLY on the intelligence feed above. Cite specific headlines and data points. Do NOT hallucinate events."""
 
-        headers = {
-            'Authorization': f'Bearer {MISTRAL_API_KEY}',
-            'Content-Type': 'application/json'
-        }
+        from llm_analyzer import call_mistral_raw
         payload = {
             'model': 'mistral-large-latest',
             'messages': [
@@ -1398,27 +1473,21 @@ CRITICAL: Scenarios must be based ONLY on the intelligence feed above. Cite spec
         }
 
         scenario_data = None
-        async with aiohttp.ClientSession() as session:
-            async with session.post(MISTRAL_API_URL, headers=headers, json=payload, timeout=90) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    raw_text = data['choices'][0]['message']['content']
-                    try:
-                        scenario_data = json.loads(raw_text)
-                    except json.JSONDecodeError:
-                        # Try to clean markdown fences
-                        clean = raw_text.strip()
-                        if clean.startswith('```'):
-                            clean = clean.split('\n', 1)[1] if '\n' in clean else clean[3:]
-                            clean = clean.rsplit('```', 1)[0]
-                        scenario_data = json.loads(clean)
-                elif resp.status == 429:
-                    print("   [SCENARIO INTELLIGENCE] Rate limited. Will retry next cycle.")
-                    return
-                else:
-                    error = await resp.text()
-                    print(f"   [SCENARIO INTELLIGENCE] API error ({resp.status}): {error[:200]}")
-                    return
+        res = await call_mistral_raw(payload, retries=5)
+        if isinstance(res, dict) and res.get("choices"):
+            raw_text = res['choices'][0]['message']['content']
+            try:
+                scenario_data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                # Try to clean markdown fences
+                clean = raw_text.strip()
+                if clean.startswith('```'):
+                    clean = clean.split('\n', 1)[1] if '\n' in clean else clean[3:]
+                    clean = clean.rsplit('```', 1)[0]
+                scenario_data = json.loads(clean)
+        else:
+            print("   [SCENARIO INTELLIGENCE] No data returned from LLM provider.")
+            return
 
         if not scenario_data:
             print("   [SCENARIO INTELLIGENCE] No data returned from Mistral.")
@@ -1573,6 +1642,7 @@ agent_status = {
     "website_scanner":        {"status": "idle", "last_run": None, "cycle_count": 0},
     "scenario_intelligence":  {"status": "idle", "last_run": None, "cycle_count": 0},
     "economic_calendar":      {"status": "idle", "last_run": None, "cycle_count": 0},
+    "continuous_news_agent":  {"status": "idle", "last_run": None, "cycle_count": 0},
 }
 
 
@@ -1601,17 +1671,18 @@ async def run_agent_loop(name: str, fn, interval_min: int):
 async def start_all_agents():
     # Slightly offset the runtimes so we don't hit mistral/telegram rate limits at exactly the same time
     await asyncio.gather(
-        run_agent_loop("news_scanner",            news_scanner_cycle,            interval_min=5),
-        # run_agent_loop("market_analyzer",         market_analyzer_cycle,         interval_min=30),
-        run_agent_loop("opportunity_finder",      opportunity_finder_cycle,      interval_min=30),
-        # run_agent_loop("trending_tracker",        trending_tracker_cycle,        interval_min=15),
-        run_agent_loop("indian_market_tracker",   indian_market_tracker_cycle,   interval_min=10),
-        run_agent_loop("telegram_scanner",        telegram_scanner_cycle,        interval_min=5),
-        run_agent_loop("visual_researcher",       visual_research_cycle,         interval_min=20),
-        run_agent_loop("google_news_scanner",     google_news_scanner_cycle,     interval_min=10),
-        # run_agent_loop("google_trends_tracker",   google_trends_tracker_cycle,   interval_min=20),
+        run_agent_loop("news_scanner",            news_scanner_cycle,            interval_min=15),
+        # run_agent_loop("market_analyzer",         market_analyzer_cycle,         interval_min=60),
+        run_agent_loop("opportunity_finder",      opportunity_finder_cycle,      interval_min=60),
+        # run_agent_loop("trending_tracker",        trending_tracker_cycle,        interval_min=30),
+        run_agent_loop("indian_market_tracker",   indian_market_tracker_cycle,   interval_min=30),
+        run_agent_loop("telegram_scanner",        telegram_scanner_cycle,        interval_min=15),
+        run_agent_loop("visual_researcher",       visual_research_cycle,         interval_min=45),
+        run_agent_loop("google_news_scanner",     google_news_scanner_cycle,     interval_min=15),
+        # run_agent_loop("google_trends_tracker",   google_trends_tracker_cycle,   interval_min=30),
         run_agent_loop("custom_monitor",          custom_intelligence_monitor_cycle, interval_min=60),
         run_agent_loop("website_scanner",         website_scanner_cycle,         interval_min=60),
-        run_agent_loop("scenario_intelligence",   scenario_intelligence_cycle,   interval_min=15),
+        run_agent_loop("scenario_intelligence",   scenario_intelligence_cycle,   interval_min=60),
         run_agent_loop("economic_calendar",      economic_calendar_cycle,       interval_min=120),
+        run_agent_loop("continuous_news_agent",  continuous_news_agent_cycle,   interval_min=45),
     )

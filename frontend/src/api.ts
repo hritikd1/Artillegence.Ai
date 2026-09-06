@@ -25,23 +25,37 @@ export async function apiFetch<T = unknown>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-  // Token expired or invalid — clear token and throw. 
-  // Individual components (like App.tsx) will handle the redirect if needed.
-  if (response.status === 401) {
-    localStorage.removeItem('token');
-    // If the session expires on an authenticated page (e.g. /dashboard), redirect to login
-    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-      window.location.href = '/login';
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // Token expired or invalid — clear token and throw. 
+    // Individual components (like App.tsx) will handle the redirect if needed.
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      // If the session expires on an authenticated page (e.g. /dashboard), redirect to login
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      throw new Error('Unauthorized');
     }
-    throw new Error('Unauthorized');
-  }
 
-  return response.json() as Promise<T>;
+    return await response.json() as Promise<T>;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Request Timeout: The server is taking too long to respond.');
+    }
+    throw err;
+  }
 }
 
 /** Convenience wrappers */

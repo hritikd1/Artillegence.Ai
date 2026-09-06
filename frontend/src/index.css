@@ -123,3 +123,37 @@
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(56, 189, 248, 0.4);
 }
+
+/* Toast slide-in animation */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(2rem) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Fade-in animation for tab transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Mobile responsive tab bar */
+@media (max-width: 768px) {
+  nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar {
+    display: none;
+  }
+}

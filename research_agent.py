@@ -14,10 +14,6 @@ from PIL import Image
 
 import database as db
 
-# Load API credentials from environment
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
-
 # ==========================================
 # Technical Indicators Math
 # ==========================================
@@ -208,32 +204,23 @@ async def analyze_chart_with_gemini(image_b64: str, symbol: str) -> str:
 
 async def call_mistral_json(prompt: str, system_prompt: str) -> dict:
     """Call Mistral v1 API with a JSON return requirement."""
-    if not MISTRAL_API_KEY:
-        return {}
-    try:
-        headers = {
-            'Authorization': f'Bearer {MISTRAL_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'model': 'mistral-large-latest',
-            'messages': [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.2,
-            'response_format': {"type": "json_object"}
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(MISTRAL_API_URL, headers=headers, json=payload, timeout=45) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    content = data['choices'][0]['message']['content']
-                    return json.loads(content)
-                else:
-                    print(f"Mistral API returned error status {response.status}")
-    except Exception as e:
-        print(f"Error querying Mistral API: {e}")
+    from llm_analyzer import call_mistral_raw
+    payload = {
+        'model': 'mistral-large-latest',
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': prompt}
+        ],
+        'temperature': 0.2,
+        'response_format': {"type": "json_object"}
+    }
+    res = await call_mistral_raw(payload, retries=5)
+    if isinstance(res, dict) and 'choices' in res:
+        content = res['choices'][0]['message']['content']
+        try:
+            return json.loads(content)
+        except Exception:
+            return {}
     return {}
 
 # ==========================================

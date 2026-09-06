@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Force UTF-8 stdout/stderr on Windows so Nemotron's Unicode characters
+# (em-dashes, non-breaking hyphens, etc.) don't crash the backend process.
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 async def main():
     print("=" * 60)
     print("MASTER ORCHESTRATOR - ARTILLEGENCE AI")

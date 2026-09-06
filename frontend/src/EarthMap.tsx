@@ -113,19 +113,32 @@ interface EarthMapProps {
     selectedEvent?: GeoEvent | null;
 }
 
+// Helper: Check if coordinates are valid numbers and within correct ranges
+export function isValidCoordinate(lat: any, lng: any): boolean {
+    const l = parseFloat(lat);
+    const n = parseFloat(lng);
+    return !isNaN(l) && !isNaN(n) && l >= -90 && l <= 90 && n >= -180 && n <= 180;
+}
+
 // Helper: fly to a filtered category's first event
 function FlyToCategory({ targetEvent, markerRefs }: { targetEvent: GeoEvent | null, markerRefs: React.MutableRefObject<{ [key: string]: L.Marker }> }) {
     const map = useMap();
     const prevTarget = useRef<string | null>(null);
 
     useEffect(() => {
-        if (!targetEvent || targetEvent.id === prevTarget.current) return;
+        if (!targetEvent || targetEvent.id === prevTarget.current || !isValidCoordinate(targetEvent.lat, targetEvent.lng)) return;
         prevTarget.current = targetEvent.id;
-        map.flyTo([targetEvent.lat, targetEvent.lng], 6, { animate: true, duration: 2 });
-        setTimeout(() => {
-            const marker = markerRefs.current[targetEvent.id];
-            if (marker) marker.openPopup();
+
+        const marker = markerRefs.current[targetEvent.id];
+        if (marker && marker.isPopupOpen()) return;
+
+        const currentZoom = map.getZoom();
+        map.flyTo([targetEvent.lat, targetEvent.lng], Math.max(currentZoom, 6), { animate: true, duration: 2 });
+        const timer = setTimeout(() => {
+            const m = markerRefs.current[targetEvent.id];
+            if (m) m.openPopup();
         }, 2100);
+        return () => clearTimeout(timer);
     }, [targetEvent, map, markerRefs]);
 
     return null;
@@ -137,7 +150,9 @@ function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: G
     const prevTotalCount = useRef(0);
     const currentIndex = useRef(0);
     const isIdle = useRef(true);
+    const isPopupOpen = useRef(false);
     const idleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoPanTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Track user activity on the map
     useEffect(() => {
@@ -156,11 +171,18 @@ function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: G
         mapEl.addEventListener('wheel', resetIdle);
         resetIdle();
 
+        const handlePopupOpen = () => { isPopupOpen.current = true; };
+        const handlePopupClose = () => { isPopupOpen.current = false; resetIdle(); };
+        map.on('popupopen', handlePopupOpen);
+        map.on('popupclose', handlePopupClose);
+
         return () => {
             mapEl.removeEventListener('mousemove', resetIdle);
             mapEl.removeEventListener('mousedown', resetIdle);
             mapEl.removeEventListener('touchstart', resetIdle);
             mapEl.removeEventListener('wheel', resetIdle);
+            map.off('popupopen', handlePopupOpen);
+            map.off('popupclose', handlePopupClose);
             if (idleTimeout.current) clearTimeout(idleTimeout.current);
         };
     }, [map]);
@@ -177,11 +199,17 @@ function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: G
     // Handle real-time new event arrival focus
     useEffect(() => {
         if (prevTotalCount.current > 0 && totalCount > prevTotalCount.current) {
-            const newest = [...events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+            const newest = [...events]
+                .filter(e => isValidCoordinate(e.lat, e.lng))
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
             if (newest) {
                 currentIndex.current = events.findIndex(e => e.id === newest.id);
-                map.flyTo([newest.lat, newest.lng], 6, { animate: true, duration: 2.5 });
-                setTimeout(() => {
+                const currentZoom = map.getZoom();
+                map.flyTo([newest.lat, newest.lng], Math.max(currentZoom, 6), { animate: true, duration: 2.5 });
+
+                if (autoPanTimeout.current) clearTimeout(autoPanTimeout.current);
+                autoPanTimeout.current = setTimeout(() => {
+                    if (isPopupOpen.current) return;
                     const marker = markerRefs.current[newest.id];
                     if (marker) marker.openPopup();
                 }, 2600);
@@ -193,12 +221,16 @@ function MapAutoPanner({ events, markerRefs, isPaused, totalCount }: { events: G
     // Slideshow logic (only triggers when idle, does NOT run on render/prop changes)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!isIdle.current || isPaused || events.length === 0) return;
+            if (!isIdle.current || isPaused || events.length === 0 || isPopupOpen.current) return;
             currentIndex.current = (currentIndex.current + 1) % events.length;
             const targetEvent = events[currentIndex.current];
-            if (targetEvent) {
-                map.flyTo([targetEvent.lat, targetEvent.lng], 5, { animate: true, duration: 2.5 });
-                setTimeout(() => {
+            if (targetEvent && isValidCoordinate(targetEvent.lat, targetEvent.lng)) {
+                const currentZoom = map.getZoom();
+                map.flyTo([targetEvent.lat, targetEvent.lng], Math.max(currentZoom, 5), { animate: true, duration: 2.5 });
+
+                if (autoPanTimeout.current) clearTimeout(autoPanTimeout.current);
+                autoPanTimeout.current = setTimeout(() => {
+                    if (isPopupOpen.current) return;
                     const marker = markerRefs.current[targetEvent.id];
                     if (marker) marker.openPopup();
                 }, 2600);
@@ -261,7 +293,7 @@ function getLocationForKeyword(keyword: string): { lat: number; lng: number; cit
 }
 
 function getEventCategory(e: GeoEvent): string {
-    const isCustom = e.isCustom 
+    const isCustom = e.isCustom
         || (e.id && (String(e.id).startsWith('custom-') || String(e.id).startsWith('websrc-') || String(e.id).startsWith('webscan-')))
         || e.source === 'User Custom'
         || e.source === 'Artillegence AI Custom Track'
@@ -277,7 +309,7 @@ function getEventCategory(e: GeoEvent): string {
 
 export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, selectedEvent }: EarthMapProps) {
     const markerRefs = useRef<{ [key: string]: L.Marker }>({});
-    
+
     // Sync flyTarget with external selectedEvent updates
     useEffect(() => {
         if (selectedEvent) {
@@ -323,7 +355,8 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                     const urlStr = String(item.url || '').toLowerCase();
                     const headStr = String(item.headline || '').toLowerCase();
                     const sumStr = String(item.summary || '').toLowerCase();
-                    return !urlStr.includes('chartlink') && !headStr.includes('chartlink') && !sumStr.includes('chartlink');
+                    const validCoords = isValidCoordinate(item.lat, item.lng);
+                    return validCoords && !urlStr.includes('chartlink') && !headStr.includes('chartlink') && !sumStr.includes('chartlink');
                 });
                 if (cleaned.length !== parsed.length) {
                     localStorage.setItem('artillegence_custom_watchlist', JSON.stringify(cleaned));
@@ -380,7 +413,9 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     }, [maxTime, timeFilter]);
 
     const displayEvents = useMemo(() => {
-        let evs = [...allEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        let evs = [...allEvents]
+            .filter(e => isValidCoordinate(e.lat, e.lng))
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         if (activeCategory) {
             evs = evs.filter(e => getEventCategory(e) === activeCategory);
         }
@@ -394,14 +429,16 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     }, [allEvents, timeFilter, maxTime, activeCategory]);
 
     // Auto-propagate default selection when events change
+    const prevSelectedId = useRef<string | null>(null);
     useEffect(() => {
         if (displayEvents.length > 0) {
             const newest = [...displayEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-            if (onSelectEvent) {
+            if (onSelectEvent && newest.id !== prevSelectedId.current) {
+                prevSelectedId.current = newest.id;
                 onSelectEvent(newest);
             }
         }
-    }, [displayEvents]);
+    }, [displayEvents, onSelectEvent]);
 
     // When user clicks a category → fly to first event of that category
     const handleCategoryClick = useCallback((category: string | null) => {
@@ -426,11 +463,11 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
         localStorage.setItem('artillegence_last_custom_query', query);
         const loc = getLocationForKeyword(query);
         const offset = () => (Math.random() - 0.5) * 0.8;
-        
+
         let headline = query;
         let summary = `📌 Custom watchlist item: "${query}"\n\nAdded by you to track on the intelligence map.`;
         let sourceUrl = `https://www.google.com/search?q=${encodeURIComponent(query + ' stock news')}`;
-        
+
         try {
             const data = await apiPost<any>('/api/custom_search', { query });
             if (data.thesis) {
@@ -440,20 +477,27 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                     sourceUrl = data.news_sources[0].url;
                 }
                 if (data.lat != null && data.lng != null) {
-                    loc.lat = data.lat;
-                    loc.lng = data.lng;
-                    loc.city = data.city || '';
-                    loc.country = data.country || '';
+                    const flat = parseFloat(data.lat);
+                    const flng = parseFloat(data.lng);
+                    if (!isNaN(flat) && !isNaN(flng)) {
+                        loc.lat = flat;
+                        loc.lng = flng;
+                        loc.city = data.city || '';
+                        loc.country = data.country || '';
+                    }
                 }
             }
-        } catch(e) {
+        } catch (e) {
             console.error("Custom search failed", e);
         }
 
+        const newItemLat = loc.lat + offset();
+        const newItemLng = loc.lng + offset();
+
         const newItem: GeoEvent = {
             id: `custom-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            lat: loc.lat + offset(),
-            lng: loc.lng + offset(),
+            lat: isNaN(newItemLat) ? 19.0760 : newItemLat,
+            lng: isNaN(newItemLng) ? 72.8777 : newItemLng,
             city: loc.city,
             country: loc.country,
             headline: headline,
@@ -465,7 +509,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
             category: '⭐ User Custom',
             isCustom: true,
         };
-        
+
         setCustomItems(prev => [...prev, newItem]);
         if (onAddCustomEvent) onAddCustomEvent(newItem);
         setCustomInput('');
@@ -605,11 +649,11 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                 style={{ background: '#070a0f' }}
                 zoomControl={true}
             >
-                {/* Premium flat dark mode tiles showing style of reference image 3 */}
+                {/* Free high-fidelity dark tiles (Esri World Dark Gray - no API key watermark) */}
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap &copy; CARTO'
-                    maxZoom={18}
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                    attribution='&copy; Esri, HERE, Garmin, USGS'
+                    maxZoom={16}
                 />
 
                 {filteredGeoJson && filteredGeoJson.features.length > 0 && (
@@ -621,7 +665,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                             const countryName = properties.ADMIN || properties.name || properties.Name || '';
                             const countryCode = properties.ISO_A3 || properties.iso_a3 || properties['ISO3166-1-Alpha-3'] || properties['ISO3166-1-Alpha-2'] || properties.code || '';
                             const color = getCountryColor(countryName, countryCode);
-                            
+
                             if (color) {
                                 return {
                                     fillColor: color,
@@ -675,7 +719,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                             }}
                         >
                             <Popup className="glass-popup pb-2" autoPan={true} autoPanPaddingTopLeft={[10, 88]} autoPanPaddingBottomRight={[10, 70]}>
-                                <div className={`bg-slate-900/95 border p-4 rounded-lg shadow-xl shadow-black/50 w-[300px] -m-3 max-h-[300px] overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50' : 'border-slate-700'}`}>
+                                <div className={`bg-slate-900/95 border p-4 rounded-lg shadow-xl shadow-black/50 -m-3 overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50 w-[400px] max-h-[400px]' : 'border-slate-700 w-[350px] max-h-[400px]'}`}>
                                     <div className="flex items-center gap-2 mb-2 justify-between">
                                         <div className="flex items-center gap-2">
                                             {ev.isCustom ? (
@@ -733,30 +777,53 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                                     <img src={`data:image/jpeg;base64,${ev.image_base64}`} alt="Scraped View" className="w-full h-auto opacity-90" />
                                                 </div>
                                             )}
-                                            {ev.telegram_post_id ? (
-                                                <div className="mt-2" style={{ maxHeight: "150px", overflowY: "auto", overflowX: "hidden", borderRadius: "8px", border: "1px solid rgba(56,189,248,0.15)" }}>
-                                                    <TelegramEmbed channelSlug={typeof ev.source === "string" ? ev.source.replace("Telegram: ", "") : "CIG_telegram"} postId={ev.telegram_post_id} compact />
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <h4 className="text-xs font-bold text-white leading-tight mb-2 pb-1 border-b border-slate-700/50">{ev.headline}</h4>
-                                                    <p className="text-[10px] text-slate-300 leading-relaxed mb-1">
+                                            <>
+                                                <h4 className="text-xs font-bold text-white leading-tight mb-2 pb-1 border-b border-slate-700/50">{ev.headline}</h4>
+                                                {ev.category === '⭐ User Custom' ? (
+                                                    <div className="mt-2 rounded overflow-hidden h-[280px] bg-white relative">
+                                                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center text-slate-800 text-xs font-bold pointer-events-none">
+                                                            Loading Browser...
+                                                        </div>
+                                                        <iframe
+                                                            src={`https://www.google.com/search?igu=1&q=${encodeURIComponent(ev.headline.replace(/Monitoring:\s*/i, ''))}`}
+                                                            className="w-full h-full border-0 relative z-10"
+                                                            title="In-App Browser"
+                                                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-slate-300 leading-relaxed mb-1 whitespace-pre-wrap">
                                                         {ev.summary}
                                                     </p>
-                                                    {ev.video ? (
-                                                        renderNewsVideo(ev.video)
-                                                    ) : ev.image ? (
-                                                        <div className="mt-2 rounded overflow-hidden max-h-32 bg-slate-950/80 flex items-center justify-center border border-slate-750/40">
-                                                            <img 
-                                                                src={ev.image} 
-                                                                alt="" 
-                                                                className="max-h-32 object-cover w-full" 
-                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
-                                                            />
-                                                        </div>
-                                                    ) : null}
-                                                </>
-                                            )}
+                                                )}
+
+                                                {(() => {
+                                                    const rawSource = typeof ev.source === "string" ? ev.source.replace("Telegram: ", "") : "CIG_telegram";
+                                                    const isEmbeddable = ev.telegram_post_id && !rawSource.includes(' ') && rawSource.toLowerCase() !== 'rnintel';
+
+                                                    if (isEmbeddable) {
+                                                        return (
+                                                            <div className="mt-2" style={{ maxHeight: "250px", overflowY: "auto", overflowX: "hidden", borderRadius: "8px", border: "1px solid rgba(56,189,248,0.15)" }}>
+                                                                <TelegramEmbed channelSlug={rawSource} postId={ev.telegram_post_id} compact />
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (ev.video) return renderNewsVideo(ev.video);
+                                                    if (ev.image) {
+                                                        return (
+                                                            <div className="mt-2 rounded overflow-hidden max-h-32 bg-slate-950/80 flex items-center justify-center border border-slate-750/40">
+                                                                <img
+                                                                    src={ev.image}
+                                                                    alt=""
+                                                                    className="max-h-32 object-cover w-full"
+                                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </>
                                         </>
                                     )}
 
@@ -864,40 +931,6 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                     </div>
                 )}
             </div>
-
-            {/* Overlay: Timeline Playback Slider */}
-            {
-                allEvents.length > 1 && minTime < maxTime && (
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/50 p-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] z-[1000] flex flex-col gap-2 transition-all hover:bg-slate-900/95 outline outline-1 outline-slate-800 pointer-events-auto">
-                        <div className="flex justify-between items-center px-1">
-                            <div className="flex items-center gap-2 text-sky-400">
-                                <Clock size={14} className={isInteracting ? "text-sky-300" : ""} />
-                                <span className="text-[10px] font-bold tracking-widest uppercase">Time Machine Playback</span>
-                            </div>
-                            <span className="text-[10px] text-sky-100 font-mono bg-slate-800/80 px-2 py-1 rounded border border-slate-700 shadow-inner">
-                                {timeFilter === null || timeFilter >= maxTime ? 'LIVE VIEW' : new Date(timeFilter).toLocaleString()}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[10px] text-slate-500 font-mono">{new Date(minTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            <input
-                                type="range"
-                                min={minTime}
-                                max={maxTime}
-                                step={1000}
-                                value={timeFilter !== null ? timeFilter : maxTime}
-                                onChange={(e) => setTimeFilter(Number(e.target.value))}
-                                onMouseDown={() => setIsInteracting(true)}
-                                onMouseUp={() => setIsInteracting(false)}
-                                onTouchStart={() => setIsInteracting(true)}
-                                onTouchEnd={() => setIsInteracting(false)}
-                                className="flex-1 h-1.5 bg-slate-700/80 rounded-lg appearance-none cursor-pointer hover:bg-slate-600 transition-colors [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:bg-sky-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(56,189,248,0.8)]"
-                            />
-                            <span className="text-[10px] text-sky-500 font-mono font-bold tracking-wider">LATEST</span>
-                        </div>
-                    </div>
-                )
-            }
 
             {/* Overwrite leaflet popup styles purely in CSS */}
             <style>{`

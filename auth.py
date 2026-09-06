@@ -38,8 +38,8 @@ def init_db():
     # Check if we need to seed the default admin
     cur = conn.cursor()
     admin_email = "deores121@gmail.com"
-    # Admin@123 (bcrypt hash)
-    admin_pass = "$2b$12$ZpMgInoH9eBfI/v3I5w3Z.XnUfV9PjT.U6Xl.rT9G6v6CqI5H1qK6"
+    # Admin@123 (freshly verified bcrypt hash — do not change unless you change the password)
+    admin_pass = "$2b$12$ZDQiaE8IV4G8qlLAY7mr3uFIJwzIji2j/yvLmXcVjeSN7WqpZ1eNe"
     
     cur.execute("SELECT id FROM users WHERE email = ?", (admin_email,))
     existing = cur.fetchone()

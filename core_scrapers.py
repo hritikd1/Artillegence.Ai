@@ -42,7 +42,7 @@ class WebScraper:
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = '\n'.join(chunk for chunk in chunks if chunk)
 
-            return text[:8000] # Limit for token budgets
+            return text[:1500] # Limit for token budgets
         except Exception as e:
             print(f"Error scraping content from {url}: {e}")
             return None
@@ -291,7 +291,11 @@ class GoogleRSSFeed(NewsSource):
 # 
 
 GOOGLE_NEWS_TOPICS = [
-    #  Market & Indices 
+    #  Continuous / Live Intel 
+    ("Indian News",           "Indian local news today latest updates"),
+    ("Global Macro",          "global macroeconomics central banks interest rates"),
+
+    #  Indices & Indices 
     ("Nifty 50",              "Nifty 50 today"),
     ("Sensex",                "Sensex today"),
     ("Bank Nifty",            "Bank Nifty today"),
@@ -495,7 +499,19 @@ class GoogleNewsScraper(NewsSource):
 
         self.last_check = datetime.now()
         filtered = self.filter_by_date(results, hours)
-        return filtered[:limit]
+        limited_results = filtered[:limit]
+        
+        # Scrape actual article text to replace snippets
+        scraper = WebScraper("Google News Article Fetcher", "web", limit=1500)
+        for res in limited_results:
+            try:
+                content = await scraper.scrape_content(res['link'])
+                if content and len(content) > 50:
+                    res['snippet'] = f"{res['title']}. {content}"
+            except Exception as e:
+                print(f"Failed to scrape full article for {res['link']}: {e}")
+                
+        return limited_results
 
 class TelegramChannelScraper(NewsSource):
     """Scrapes public posts from a Telegram channel using web preview."""
