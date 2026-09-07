@@ -1208,6 +1208,14 @@ async def get_stock_financials(symbol: str):
 async def get_economic_calendar(_user=Depends(require_auth)):
     """Return the cached Indian Economic & Corporate Actions Calendar."""
     cache = db.get_intelligence("economic_calendar")
+    if not cache or not cache.get("events"):
+        try:
+            from agents import economic_calendar_cycle
+            await economic_calendar_cycle()
+            cache = db.get_intelligence("economic_calendar")
+        except Exception as e:
+            print(f"[API] Error running economic_calendar_cycle on-demand: {e}")
+
     if not cache:
         cache = {"events": [], "updated_at": datetime.now().isoformat()}
     return cache

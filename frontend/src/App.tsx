@@ -3130,27 +3130,36 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
       }
 
       // 3. Time match
-      const evDate = new Date(ev.date);
+      const dateParts = String(ev.date || '').split('-');
+      let evYear = 0, evMonth = 0, evDay = 0;
+      if (dateParts.length === 3) {
+        evYear = parseInt(dateParts[0], 10);
+        evMonth = parseInt(dateParts[1], 10) - 1;
+        evDay = parseInt(dateParts[2], 10);
+      } else {
+        const d = new Date(ev.date);
+        evYear = d.getFullYear();
+        evMonth = d.getMonth();
+        evDay = d.getDate();
+      }
+
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayYear = today.getFullYear();
+      const todayMonth = today.getMonth();
+      const todayDay = today.getDate();
 
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayStart = new Date(todayYear, todayMonth, todayDay).getTime();
+      const tomorrowStart = new Date(todayYear, todayMonth, todayDay + 1).getTime();
+      const weekEnd = new Date(todayYear, todayMonth, todayDay + 7, 23, 59, 59).getTime();
 
-      const oneWeek = new Date(today);
-      oneWeek.setDate(oneWeek.getDate() + 7);
-
-      const evTime = evDate.getTime();
-      const todayTime = today.getTime();
-      const tomorrowTime = tomorrow.getTime();
-      const oneWeekTime = oneWeek.getTime();
+      const evTime = new Date(evYear, evMonth, evDay).getTime();
 
       if (timeFilter === 'today') {
-        return evTime === todayTime;
+        return evTime === todayStart;
       } else if (timeFilter === 'tomorrow') {
-        return evTime === tomorrowTime;
+        return evTime === tomorrowStart;
       } else if (timeFilter === 'week') {
-        return evTime >= todayTime && evTime <= oneWeekTime;
+        return evTime >= todayStart && evTime <= weekEnd;
       }
 
       return true;
