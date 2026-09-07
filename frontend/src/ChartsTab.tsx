@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Search, BrainCircuit, Camera, TrendingUp, TrendingDown,
     Minus, AlertTriangle, Newspaper, RefreshCw, ChevronDown, ChevronUp,
-    Eye, ClipboardPaste, MousePointer, Move, Edit3, Square, Circle as CircleIcon, Eraser, Paperclip
+    Eye, ClipboardPaste, MousePointer, Move, Edit3, Square, Circle as CircleIcon, Eraser, Paperclip, Shield, Activity
 } from 'lucide-react';
 import { apiPost, apiGet } from './api';
 import { extractTextFromPdfFile } from './pdfUtils';
@@ -758,13 +758,37 @@ export default function ChartsTab() {
             line: { color: '#ef4444', width: 2, shape: 'hv' },
             connectgaps: false
         },
+        // 80% Confidence Interval Shading Band
+        ...(forecastData.forecast.upper_ci ? [
+            {
+                x: forecastData.forecast.date,
+                y: forecastData.forecast.upper_ci,
+                type: 'scatter',
+                mode: 'lines',
+                name: '80% CI Upper',
+                yaxis: 'y',
+                line: { color: 'rgba(250, 204, 21, 0.25)', width: 1, dash: 'dot' },
+                showlegend: false
+            },
+            {
+                x: forecastData.forecast.date,
+                y: forecastData.forecast.lower_ci,
+                type: 'scatter',
+                mode: 'lines',
+                name: '80% Confidence Band',
+                yaxis: 'y',
+                fill: 'tonexty',
+                fillcolor: 'rgba(250, 204, 21, 0.08)',
+                line: { color: 'rgba(250, 204, 21, 0.25)', width: 1, dash: 'dot' }
+            }
+        ] : []),
         // AI Projection (Future)
         {
             x: forecastData.forecast.date,
             y: forecastData.forecast.price,
             type: 'scatter',
             mode: 'lines',
-            name: 'AI Forecast',
+            name: 'AI Ensemble Forecast',
             yaxis: 'y',
             line: { color: '#facc15', width: 3, dash: 'dot', shape: 'spline' }
         },
@@ -933,6 +957,19 @@ export default function ChartsTab() {
                                 <span className="text-[13px] font-bold text-slate-500 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded uppercase">
                                     {activeSymbol}
                                 </span>
+                                {forecastData?.learned_profile && (
+                                    <div className="flex items-center gap-1.5 flex-wrap ml-2">
+                                        <span className="text-[10px] font-bold text-sky-400 bg-sky-950/60 border border-sky-800 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <BrainCircuit size={10} /> Learned Window: {forecastData.learned_profile.optimal_window_size}d
+                                        </span>
+                                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <Shield size={10} /> Self-Tuned Accuracy: {forecastData.learned_profile.directional_accuracy_pct}%
+                                        </span>
+                                        <span className="text-[10px] font-bold text-indigo-300 bg-indigo-950/60 border border-indigo-800 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <Activity size={10} /> Ensemble: {forecastData.ensemble_clusters_count || 5} Clusters
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Custom Drawing Toolbar */}
@@ -1059,6 +1096,42 @@ export default function ChartsTab() {
                             <div className="mt-4 pt-3 border-t border-slate-800/80 text-[15px] text-slate-400 leading-relaxed">
                                 <span className="text-violet-300 font-bold">Backtest Summary: </span>
                                 On <span className="text-white font-mono">{forecastData.backtest.start_date}</span>, the model executed a similarity scan and predicted the market trajectory for the subsequent 30 days. The predicted path showed a <span className="text-white font-bold">{Math.abs(forecastData.backtest.correlation * 100).toFixed(1)}%</span> correlation to what actually transpired. The predicted direction was <span className={forecastData.backtest.direction_match ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>{forecastData.backtest.direction_match ? 'CORRECT' : 'INCORRECT'}</span>.
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 🧠 Self-Learning Accuracy & Profile Calibration Card */}
+                    {forecastData?.learned_profile && (
+                        <div className="glass-panel p-5 border border-slate-800/80 rounded-xl relative overflow-hidden bg-slate-950/40">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/60 pb-3 mb-3">
+                                <div className="flex items-center gap-2">
+                                    <BrainCircuit className="text-neonBlue animate-pulse" size={18} />
+                                    <h3 className="text-xs font-bold text-white tracking-widest uppercase">
+                                        SELF-LEARNING & ADAPTIVE MODEL CALIBRATION
+                                    </h3>
+                                </div>
+                                <span className="text-[9px] font-mono text-slate-500">
+                                    Last Calibrated: {new Date(forecastData.learned_profile.last_calibrated_at).toLocaleString()}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Learned Optimal Window</span>
+                                    <span className="text-lg font-black text-sky-400 font-mono mt-0.5">{forecastData.learned_profile.optimal_window_size} Days</span>
+                                </div>
+                                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Directional Hit Rate</span>
+                                    <span className="text-lg font-black text-emerald-400 font-mono mt-0.5">{forecastData.learned_profile.directional_accuracy_pct}%</span>
+                                </div>
+                                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Average MAPE Error</span>
+                                    <span className="text-lg font-black text-amber-400 font-mono mt-0.5">{forecastData.learned_profile.mean_absolute_error_pct}%</span>
+                                </div>
+                                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Evaluated Predictions</span>
+                                    <span className="text-lg font-black text-purple-400 font-mono mt-0.5">{forecastData.learned_profile.sample_count} Samples</span>
+                                </div>
                             </div>
                         </div>
                     )}

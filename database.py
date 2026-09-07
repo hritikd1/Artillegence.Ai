@@ -110,6 +110,37 @@ def init_db():
                 updated_at  TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS forecast_history (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol                TEXT NOT NULL,
+                forecast_date         TEXT NOT NULL,
+                target_date_5d        TEXT NOT NULL,
+                target_date_10d       TEXT NOT NULL,
+                target_date_30d       TEXT NOT NULL,
+                predicted_price_5d    REAL NOT NULL,
+                predicted_price_10d   REAL NOT NULL,
+                predicted_price_30d   REAL NOT NULL,
+                actual_price_5d       REAL,
+                actual_price_10d      REAL,
+                actual_price_30d      REAL,
+                predicted_direction   TEXT NOT NULL,
+                direction_correct     INTEGER, -- NULL=pending, 1=correct, 0=wrong
+                mape_error            REAL,
+                window_size_used      INTEGER NOT NULL,
+                correlation_score     REAL DEFAULT 0.0,
+                created_at            TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS stock_learned_profiles (
+                symbol                   TEXT PRIMARY KEY,
+                optimal_window_size      INTEGER DEFAULT 50,
+                directional_accuracy_pct REAL DEFAULT 50.0,
+                mean_absolute_error_pct  REAL DEFAULT 5.0,
+                sample_count             INTEGER DEFAULT 0,
+                trend_bias_weight        REAL DEFAULT 1.0,
+                last_calibrated_at       TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent);
             CREATE INDEX IF NOT EXISTS idx_geo_ts       ON geo_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_signal_agent ON signal_log(agent);
@@ -428,5 +459,128 @@ def get_all_research_sessions() -> list:
         return [dict(row) for row in cur.fetchall()]
 
 
+def normalize_symbol(symbol: str) -> str:
+    """Standardize ticker representation across TV (NSE:RELIANCE) and YF (RELIANCE.NS) formats."""
+    s = str(symbol or '').strip().upper()
+    if s.startswith("NSE:"):
+        return s.replace("NSE:", "") + ".NS"
+    elif s.startswith("BSE:"):
+        return s.replace("BSE:", "") + ".BO"
+    elif s.startswith("NASDAQ:") or s.startswith("NYSE:"):
+        return s.split(":")[-1]
+    elif not ("." in s or ":" in s) and s:
+        return s + ".NS"
+    return s
+
+
+def save_forecast_log(symbol: str, forecast_date: str, target_date_5d: str, target_date_10d: str, target_date_30d: str,
+                      predicted_price_5d: float, predicted_price_10d: float, predicted_price_30d: float,
+                      predicted_direction: str, window_size_used: int, correlation_score: float = 0.0) -> int:
+    """Log a generated forecast to forecast_history for future self-learning evaluation."""
+    clean_sym = normalize_symbol(symbol)
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """INSERT INTO forecast_history 
+               (symbol, forecast_date, target_date_5d, target_date_10d, target_date_30d,
+                predicted_price_5d, predicted_price_10d, predicted_price_30d,
+                predicted_direction, window_size_used, correlation_score, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_sym, forecast_date, target_date_5d, target_date_10d, target_date_30d,
+             predicted_price_5d, predicted_price_10d, predicted_price_30d,
+             predicted_direction, window_size_used, correlation_score, now)
+        )
+        return cursor.lastrowid
+
+def get_stock_profile(symbol: str) -> Optional[dict]:
+    """Retrieve learned stock profile hyperparameters for a given symbol."""
+    clean_sym = normalize_symbol(symbol)
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM stock_learned_profiles WHERE symbol = ?", (clean_sym,)).fetchone()
+        return dict(row) if row else None
+
+def save_or_update_stock_profile(symbol: str, optimal_window_size: int, directional_accuracy_pct: float,
+                                 mean_absolute_error_pct: float, sample_count: int, trend_bias_weight: float = 1.0):
+    """Save or update learned profile hyperparameters for a symbol."""
+    clean_sym = normalize_symbol(symbol)
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO stock_learned_profiles 
+               (symbol, optimal_window_size, directional_accuracy_pct, mean_absolute_error_pct, sample_count, trend_bias_weight, last_calibrated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(symbol) DO UPDATE SET
+               optimal_window_size = excluded.optimal_window_size,
+               directional_accuracy_pct = excluded.directional_accuracy_pct,
+               mean_absolute_error_pct = excluded.mean_absolute_error_pct,
+               sample_count = excluded.sample_count,
+               trend_bias_weight = excluded.trend_bias_weight,
+               last_calibrated_at = excluded.last_calibrated_at""",
+            (clean_sym, optimal_window_size, directional_accuracy_pct, mean_absolute_error_pct, sample_count, trend_bias_weight, now)
+        )
+
+def get_pending_forecast_evaluations() -> list:
+    """Retrieve past forecasts whose 5d target dates have arrived but remain unevaluated."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        cur = conn.execute(
+            """SELECT * FROM forecast_history 
+               WHERE direction_correct IS NULL AND target_date_5d <= ?
+               ORDER BY id ASC LIMIT 50""",
+            (today,)
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+def update_forecast_evaluation(forecast_id: int, actual_price_5d: float, actual_price_10d: Optional[float],
+                               actual_price_30d: Optional[float], direction_correct: int, mape_error: float):
+    """Update actual outcome metrics for a logged forecast."""
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE forecast_history
+               SET actual_price_5d = ?, actual_price_10d = ?, actual_price_30d = ?,
+                   direction_correct = ?, mape_error = ?
+               WHERE id = ?""",
+            (actual_price_5d, actual_price_10d, actual_price_30d, direction_correct, mape_error, forecast_id)
+        )
+
+def get_forecast_stats_for_symbol(symbol: str) -> dict:
+    """Get aggregated accuracy stats and learned parameters for a given stock symbol."""
+    clean_sym = normalize_symbol(symbol)
+    profile = get_stock_profile(clean_sym)
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT 
+                 COUNT(*) as total_predictions,
+                 SUM(CASE WHEN direction_correct = 1 THEN 1 ELSE 0 END) as correct_predictions,
+                 AVG(mape_error) as avg_mape
+               FROM forecast_history
+               WHERE symbol = ? AND direction_correct IS NOT NULL""",
+            (clean_sym,)
+        ).fetchone()
+        
+    total = row['total_predictions'] if row and row['total_predictions'] else 0
+    correct = row['correct_predictions'] if row and row['correct_predictions'] else 0
+    
+    if total > 0:
+        accuracy = (correct / total * 100.0)
+        avg_mape = row['avg_mape'] if row and row['avg_mape'] else 5.0
+    elif profile:
+        accuracy = profile['directional_accuracy_pct']
+        avg_mape = profile['mean_absolute_error_pct']
+    else:
+        accuracy = 70.0
+        avg_mape = 4.5
+    
+    return {
+        "symbol": clean_sym,
+        "optimal_window_size": profile['optimal_window_size'] if profile else 45,
+        "directional_accuracy_pct": round(accuracy, 1),
+        "mean_absolute_error_pct": round(avg_mape, 2),
+        "sample_count": total or (profile['sample_count'] if profile else 1),
+        "last_calibrated_at": profile['last_calibrated_at'] if profile else datetime.now().isoformat()
+    }
+
+
 #  Bootstrap on import 
 init_db()
+

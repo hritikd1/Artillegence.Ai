@@ -323,6 +323,17 @@ async def stock_forecast(request: ForecastRequest, _user=Depends(require_auth)):
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/api/forecast/stats")
+async def get_forecast_stats(symbol: str, _user=Depends(require_auth)):
+    """Retrieve self-learning profile & accuracy stats for a symbol."""
+    try:
+        from forecaster import StockForecaster
+        f = StockForecaster(symbol)
+        stats = db.get_forecast_stats_for_symbol(f.symbol)
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
+
 class AddSourceRequest(BaseModel):
     url: str
 

@@ -1672,6 +1672,71 @@ def get_signal_scorecard() -> dict:
 
 
 # 
+# AGENT 14: Forecast Accuracy Evaluator & Self-Learning Calibrator
+# 
+
+async def forecast_evaluator_cycle():
+    """Evaluate past forecasts against actual market prices & tune per-stock learned profiles."""
+    print("\n [FORECAST EVALUATOR] Checking pending predictions against actual market outcomes...")
+    try:
+        import yfinance as yf
+        import pandas as pd
+        pending = db.get_pending_forecast_evaluations()
+        if not pending:
+            print("   [FORECAST EVALUATOR] No pending forecasts to evaluate.")
+            return
+
+        evaluated_count = 0
+        for item in pending:
+            symbol = item["symbol"]
+            fid = item["id"]
+            
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="1mo")
+            if df.empty:
+                continue
+
+            df = df.reset_index()
+            df['date_str'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+            
+            target_date = item["target_date_5d"]
+            match = df[df['date_str'] >= target_date]
+            if match.empty:
+                continue
+
+            actual_5d = float(match.iloc[0]['Close'])
+            pred_dir = item["predicted_direction"]
+            
+            pct_err = abs(actual_5d - item["predicted_price_5d"]) / actual_5d * 100.0
+            direction_hit = 1 if (pred_dir == "BULLISH" and actual_5d >= item["predicted_price_5d"] * 0.99) or \
+                                 (pred_dir == "BEARISH" and actual_5d <= item["predicted_price_5d"] * 1.01) else 0
+
+            db.update_forecast_evaluation(
+                forecast_id=fid,
+                actual_price_5d=actual_5d,
+                actual_price_10d=None,
+                actual_price_30d=None,
+                direction_correct=direction_hit,
+                mape_error=round(pct_err, 2)
+            )
+            
+            stats = db.get_forecast_stats_for_symbol(symbol)
+            db.save_or_update_stock_profile(
+                symbol=symbol,
+                optimal_window_size=item["window_size_used"],
+                directional_accuracy_pct=stats["directional_accuracy_pct"],
+                mean_absolute_error_pct=stats["mean_absolute_error_pct"],
+                sample_count=stats["sample_count"],
+                trend_bias_weight=1.0
+            )
+            evaluated_count += 1
+
+        print(f"   [FORECAST EVALUATOR] Evaluated & updated {evaluated_count} forecasts.")
+    except Exception as e:
+        print(f"   [FORECAST EVALUATOR] Error: {e}")
+
+
+# 
 # Agent Status Tracking & Loops
 # 
 
@@ -1690,6 +1755,7 @@ agent_status = {
     "scenario_intelligence":  {"status": "idle", "last_run": None, "cycle_count": 0},
     "economic_calendar":      {"status": "idle", "last_run": None, "cycle_count": 0},
     "continuous_news_agent":  {"status": "idle", "last_run": None, "cycle_count": 0},
+    "forecast_evaluator":     {"status": "idle", "last_run": None, "cycle_count": 0},
 }
 
 
@@ -1732,4 +1798,5 @@ async def start_all_agents():
         run_agent_loop("scenario_intelligence",   scenario_intelligence_cycle,   interval_min=60),
         run_agent_loop("economic_calendar",      economic_calendar_cycle,       interval_min=120),
         run_agent_loop("continuous_news_agent",  continuous_news_agent_cycle,   interval_min=45),
+        run_agent_loop("forecast_evaluator",     forecast_evaluator_cycle,      interval_min=120),
     )
