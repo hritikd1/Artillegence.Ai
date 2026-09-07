@@ -480,7 +480,7 @@ function EventDetailsSidebar({
   );
 }
 
-function ImpactMetricsCards({ events, scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
+function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
   const eventsArr = Array.isArray(events) ? events : [];
   const [heatmapFilter, setHeatmapFilter] = useState<'all' | 'gainers' | 'risk'>('all');
 
@@ -1235,6 +1235,12 @@ function App() {
           <Star size={12} /> WATCHLIST
         </button>
         <button
+          onClick={() => setActiveTab('signals')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all flex items-center gap-1.5 ${activeTab === 'signals' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+        >
+          <Target size={12} /> SIGNALS
+        </button>
+        <button
           onClick={() => setActiveTab('research')}
           className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'research' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
         >
@@ -1390,7 +1396,18 @@ function App() {
         </Suspense>
       )}
 
-
+      {activeTab === 'signals' && (
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-20 glass-panel h-[600px]">
+            <Target className="animate-pulse text-indigo-400 mb-4" size={48} />
+            <span className="text-slate-400 font-bold tracking-widest">LOADING SIGNALS...</span>
+          </div>
+        }>
+          <div className="animate-fade-in">
+            <SignalsTab />
+          </div>
+        </Suspense>
+      )}
 
       {activeTab === 'research' && (
         <div className="animate-fade-in">

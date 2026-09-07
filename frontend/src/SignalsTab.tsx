@@ -274,7 +274,7 @@ function StatCard({
   label,
   value,
   icon,
-  color,
+  color: _color,
   highlight,
 }: {
   label: string

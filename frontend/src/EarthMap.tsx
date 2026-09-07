@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, ExternalLink, Clock, Plus, X, Search, Star } from 'lucide-react';
+import { MapPin, ExternalLink, Plus, X, Search, Star } from 'lucide-react';
 import { TelegramEmbed, renderNewsVideo } from './TelegramFeed';
 import { apiPost } from './api';
 
@@ -317,7 +317,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
         }
     }, [selectedEvent]);
     const [timeFilter, setTimeFilter] = useState<number | null>(null);
-    const [isInteracting, setIsInteracting] = useState(false);
+    const isInteracting = false;
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
     const [flyTarget, setFlyTarget] = useState<GeoEvent | null>(null);
 
@@ -396,7 +396,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
         return cats;
     }, [allEvents]);
 
-    const { minTime, maxTime } = useMemo(() => {
+    const { maxTime } = useMemo(() => {
         if (!allEvents.length) return { minTime: 0, maxTime: 0 };
         const times = allEvents.map(e => new Date(e.timestamp).getTime());
         return {
@@ -804,7 +804,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                                     if (isEmbeddable) {
                                                         return (
                                                             <div className="mt-2" style={{ maxHeight: "250px", overflowY: "auto", overflowX: "hidden", borderRadius: "8px", border: "1px solid rgba(56,189,248,0.15)" }}>
-                                                                <TelegramEmbed channelSlug={rawSource} postId={ev.telegram_post_id} compact />
+                                                                <TelegramEmbed channelSlug={rawSource} postId={ev.telegram_post_id!} compact />
                                                             </div>
                                                         );
                                                     }

@@ -3,7 +3,7 @@
  * Users add stocks and see live prices, P&L, and quick access to AI analysis.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { Star, Plus, Trash2, TrendingUp, TrendingDown, RefreshCw, Search, BarChart3, Zap, X } from 'lucide-react'
+import { Star, Plus, Trash2, TrendingUp, TrendingDown, RefreshCw, Search, Zap, X } from 'lucide-react'
 import { apiGet, apiPost } from './api'
 
 interface WatchlistStock {
@@ -109,11 +109,6 @@ export default function WatchlistTab() {
       setAnalysisLoading(null)
     }
   }
-
-  const totalValue = symbols.reduce((sum, sym) => {
-    const data = stockData[sym]
-    return sum + (data?.price || 0)
-  }, 0)
 
   const gainers = symbols.filter(s => stockData[s]?.is_positive).length
   const losers = symbols.filter(s => stockData[s] && !stockData[s].is_positive).length

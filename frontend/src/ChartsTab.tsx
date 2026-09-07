@@ -1250,7 +1250,7 @@ export default function ChartsTab() {
     );
 }
 
-const TradingViewBSEWidget = React.memo(() => {
+export const TradingViewBSEWidget = React.memo(() => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {

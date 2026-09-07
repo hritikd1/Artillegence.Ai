@@ -40,3 +40,4 @@ google_trends.json
 market_insights.json
 investor_knowledge_base.json
 news_monitor_session.session
+*.log
