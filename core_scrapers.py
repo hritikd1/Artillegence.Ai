@@ -28,11 +28,22 @@ class WebScraper:
             # Use Scrapling with Chrome TLS impersonation to bypass bot checks
             response = await asyncio.to_thread(Fetcher.get, url, impersonate='chrome', timeout=timeout)
             
+            html_body = None
             if response.status != 200:
-                print(f"Scrapling returned status {response.status} for {url}")
+                print(f"Scrapling returned status {response.status} for {url}. Attempting standard fallback.")
+            else:
+                html_body = response.body
+                
+            if not html_body:
+                import urllib.request
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'})
+                with urllib.request.urlopen(req, timeout=timeout) as fallback_resp:
+                    html_body = fallback_resp.read()
+
+            if not html_body:
                 return None
 
-            soup = BeautifulSoup(response.body, 'html.parser')
+            soup = BeautifulSoup(html_body, 'html.parser')
 
             for script_or_style in soup(['script', 'style', 'nav', 'footer', 'aside']):
                 script_or_style.decompose()

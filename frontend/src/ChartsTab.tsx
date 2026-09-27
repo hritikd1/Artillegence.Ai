@@ -140,7 +140,7 @@ export default function ChartsTab() {
     const [forecastError, setForecastError] = useState<string | null>(null);
     const [isFetchingForecast, setIsFetchingForecast] = useState(false);
     const [PlotComponent, setPlotComponent] = useState<any>(null);
-    const [dragMode, setDragMode] = useState<string>('zoom');
+    const [dragMode, setDragMode] = useState<string>('pan');
 
     const TOOLBAR_ITEMS = [
         { mode: 'zoom', label: 'Zoom/Select', icon: <MousePointer size={14} /> },
@@ -711,10 +711,63 @@ export default function ChartsTab() {
     };
 
     /* ─── JSX ─── */
-    const atrTrail = forecastData?.history?.atr_trail || [];
-    const atrTrailBull = forecastData?.history?.atr_trail_bull || [];
-    const atrBullY = atrTrail.map((v: any, idx: number) => atrTrailBull[idx] === true ? v : null);
-    const atrBearY = atrTrail.map((v: any, idx: number) => atrTrailBull[idx] === false ? v : null);
+    const getSegmentTraces = (dates: string[], values: number[], directions: any[], name: string, bullColor: string, bearColor: string, isDots = false, extraStyle = {}) => {
+        if (!values || !directions || !dates) return [];
+        const traces: any[] = [];
+        let currentSegment: { x: string, y: number }[] = [];
+        let currentDir: any = null;
+        for (let i = 0; i < values.length; i++) {
+            const val = values[i];
+            const dir = directions[i];
+            if (val === null || val === undefined) {
+                if (currentSegment.length > 0) {
+                    const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+                    traces.push({
+                        x: currentSegment.map(s => s.x), y: currentSegment.map(s => s.y),
+                        type: 'scatter', mode: isDots ? 'markers' : 'lines',
+                        name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+                        line: isDots ? undefined : { color, ...extraStyle },
+                        marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+                        legendgroup: name, showlegend: traces.length === 0, yaxis: 'y'
+                    });
+                    currentSegment = [];
+                }
+                currentDir = null;
+                continue;
+            }
+            if (currentDir === null) {
+                currentDir = dir;
+                currentSegment.push({ x: dates[i], y: val });
+            } else if (dir === currentDir) {
+                currentSegment.push({ x: dates[i], y: val });
+            } else {
+                currentSegment.push({ x: dates[i], y: val });
+                const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+                traces.push({
+                    x: currentSegment.map(s => s.x), y: currentSegment.map(s => s.y),
+                    type: 'scatter', mode: isDots ? 'markers' : 'lines',
+                    name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+                    line: isDots ? undefined : { color, ...extraStyle },
+                    marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+                    legendgroup: name, showlegend: traces.length === 0, yaxis: 'y'
+                });
+                currentSegment = [{ x: dates[i], y: val }];
+                currentDir = dir;
+            }
+        }
+        if (currentSegment.length > 0) {
+            const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
+            traces.push({
+                x: currentSegment.map(s => s.x), y: currentSegment.map(s => s.y),
+                type: 'scatter', mode: isDots ? 'markers' : 'lines',
+                name: `${name} (${currentDir === 1 || currentDir === true ? 'Bull' : 'Bear'})`,
+                line: isDots ? undefined : { color, ...extraStyle },
+                marker: isDots ? { color, size: 3.5, ...extraStyle } : undefined,
+                legendgroup: name, showlegend: traces.length === 0, yaxis: 'y'
+            });
+        }
+        return traces;
+    };
 
     const volumeColors = forecastData?.history?.close?.map((c: number, idx: number) => {
         if (idx === 0) return '#10b981';
@@ -736,28 +789,9 @@ export default function ChartsTab() {
             increasing: { line: { color: '#10b981', width: 1.5 } },
             decreasing: { line: { color: '#ef4444', width: 1.5 } }
         },
-        // ATR Trail Bull
-        {
-            x: forecastData.history.date,
-            y: atrBullY,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'HTF Stop (Bull)',
-            yaxis: 'y',
-            line: { color: '#10b981', width: 2, shape: 'hv' },
-            connectgaps: false
-        },
-        // ATR Trail Bear
-        {
-            x: forecastData.history.date,
-            y: atrBearY,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'HTF Stop (Bear)',
-            yaxis: 'y',
-            line: { color: '#ef4444', width: 2, shape: 'hv' },
-            connectgaps: false
-        },
+        // Supertrends
+        ...getSegmentTraces(forecastData.history.date, forecastData.history.supertrend_1w, forecastData.history.supertrend_1w_dir, 'Supertrend 1W', '#10b981', '#ef4444', true, { size: 4 }),
+        ...getSegmentTraces(forecastData.history.date, forecastData.history.supertrend_5w, forecastData.history.supertrend_5w_dir, 'Supertrend 5W', '#059669', '#dc2626', true, { size: 5 }),
         // 80% Confidence Interval Shading Band
         ...(forecastData.forecast.upper_ci ? [
             {
@@ -851,6 +885,7 @@ export default function ChartsTab() {
         margin: { l: 50, r: 50, t: 30, b: 40 },
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
+        uirevision: activeSymbol,
         showlegend: true,
         legend: {
             orientation: 'h',
@@ -868,7 +903,14 @@ export default function ChartsTab() {
             gridcolor: 'rgba(51, 65, 85, 0.1)',
             tickfont: { size: 9, color: '#64748b' },
             rangeslider: { visible: false },
-            zeroline: false
+            zeroline: false,
+            range: (forecastData?.history?.date && forecastData.history.date.length > 150)
+                ? [
+                    forecastData.history.date[forecastData.history.date.length - 150],
+                    (forecastData.forecast?.date && forecastData.forecast.date.length > 0)
+                        ? forecastData.forecast.date[forecastData.forecast.date.length - 1]
+                        : forecastData.history.date[forecastData.history.date.length - 1]
+                ] : undefined
         },
         yaxis: {
             domain: [0.42, 1.0],
@@ -1023,8 +1065,10 @@ export default function ChartsTab() {
                                     data={combinedTraces}
                                     layout={combinedLayout}
                                     config={{
+                                        displaylogo: false,
                                         displayModeBar: true,
                                         responsive: true,
+                                        scrollZoom: true,
                                         modeBarButtonsToAdd: [
                                             'drawline',
                                             'drawopenpath',
@@ -1032,6 +1076,10 @@ export default function ChartsTab() {
                                             'drawcircle',
                                             'drawrect',
                                             'eraseshape'
+                                        ],
+                                        modeBarButtonsToRemove: [
+                                            'select2d',
+                                            'lasso2d'
                                         ]
                                     }}
                                     className="w-full h-full"
@@ -1873,8 +1921,29 @@ const FundamentalsInfographicWidget = React.memo(({ symbol }: { symbol: string }
 /* ─── Top Gainers & Losers Widget ─── */
 const TopGainersLosersWidget = React.memo(({ onSelectSymbol }: { onSelectSymbol: (symbol: string) => void }) => {
     const [tab, setTab] = useState<'gainers' | 'losers'>('gainers');
+    const [moversData, setMoversData] = useState<{ gainers: any[], losers: any[] } | null>(null);
 
-    const gainers = [
+    useEffect(() => {
+        let isMounted = true;
+        const fetchMovers = async () => {
+            try {
+                const data = await apiGet<any>('/api/market/movers');
+                if (isMounted && data && data.gainers) {
+                    setMoversData(data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch market movers:", err);
+            }
+        };
+        fetchMovers();
+        const interval = setInterval(fetchMovers, 60000); // refresh every minute
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, []);
+
+    const gainers = moversData?.gainers || [
         { symbol: "NSE:RELIANCE", name: "Reliance Industries", price: "₹2,950.40", change: "+3.20%", changeNum: 3.20, diff: "+₹91.46", vol: "12.4M" },
         { symbol: "NSE:TCS", name: "Tata Consultancy Services", price: "₹4,120.15", change: "+2.85%", changeNum: 2.85, diff: "+₹114.20", vol: "4.1M" },
         { symbol: "NSE:HDFCBANK", name: "HDFC Bank Ltd", price: "₹1,680.50", change: "+2.40%", changeNum: 2.40, diff: "+₹39.38", vol: "21.8M" },
@@ -1883,7 +1952,7 @@ const TopGainersLosersWidget = React.memo(({ onSelectSymbol }: { onSelectSymbol:
         { symbol: "NSE:SBIN", name: "State Bank of India", price: "₹785.40", change: "+1.75%", changeNum: 1.75, diff: "+₹13.51", vol: "18.6M" },
     ];
 
-    const losers = [
+    const losers = moversData?.losers || [
         { symbol: "NSE:ITC", name: "ITC Limited", price: "₹420.15", change: "-1.80%", changeNum: -1.80, diff: "-₹7.70", vol: "14.2M" },
         { symbol: "NSE:KOTAKBANK", name: "Kotak Mahindra Bank", price: "₹1,740.25", change: "-1.45%", changeNum: -1.45, diff: "-₹25.60", vol: "5.4M" },
         { symbol: "NSE:ASIANPAINT", name: "Asian Paints Ltd", price: "₹2,850.60", change: "-1.20%", changeNum: -1.20, diff: "-₹34.62", vol: "1.8M" },

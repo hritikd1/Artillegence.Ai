@@ -6,12 +6,31 @@
   --color-border: rgba(56, 189, 248, 0.3);
   --color-neon-blue: #38bdf8;
   --color-neon-purple: #a855f7;
+  --color-text-main: #e2e8f0;
+}
+
+.theme-neon-black {
+  --color-background: #000000;
+  --color-card: rgba(10, 10, 10, 0.8);
+  --color-border: rgba(255, 255, 255, 0.2);
+  --color-neon-blue: #e2e8f0;
+  --color-neon-purple: #9ca3af;
+  --color-text-main: #f8fafc;
+}
+
+.theme-neon-white {
+  --color-background: #f8fafc;
+  --color-card: rgba(255, 255, 255, 0.8);
+  --color-border: rgba(0, 0, 0, 0.15);
+  --color-neon-blue: #0f172a;
+  --color-neon-purple: #334155;
+  --color-text-main: #0f172a;
 }
 
 @layer base {
   body {
     background-color: var(--color-background);
-    color: #e2e8f0;
+    color: var(--color-text-main);
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

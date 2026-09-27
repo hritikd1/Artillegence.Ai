@@ -430,10 +430,35 @@ async def add_intel_source(request: AddSourceRequest, _user=Depends(require_auth
                         "url": url
                     }
                     await manager.broadcast(feed_event)
-                    
+                
+                # Persist to website_scanner intelligence cache so it appears on reload
+                if scraped_items:
+                    existing_data = db.get_intelligence("website_scanner") or {"agent": "website_scanner", "news_items": []}
+                    news_items = existing_data.get("news_items", [])
+                    for item in scraped_items:
+                        news_items.insert(0, {
+                            "agent": "website_scanner",
+                            "title": item["headline"],
+                            "summary": item["summary"],
+                            "timestamp": item["timestamp"],
+                            "url": url
+                        })
+                    # Keep latest 50
+                    existing_data["news_items"] = news_items[:50]
+                    db.save_intelligence("website_scanner", existing_data)
+
                 db.mark_source_scanned(url)
+            else:
+                return {
+                    "status": "error",
+                    "error": f"Failed to read content from {url}. The website might be blocking scrapers."
+                }
         except Exception as e:
             print(f"[ADD_SOURCE] Immediate scrape error: {e}")
+            return {
+                "status": "error",
+                "error": f"Scraper error: {str(e)}"
+            }
     
     return {
         "status": "success", 
@@ -883,6 +908,176 @@ async def get_market_performance(_user=Depends(require_auth)):
         print(f"Error fetching performance data: {e}")
         return get_fallback_performance_data()
 
+_movers_cache = {"data": None, "last_updated": 0}
+
+@app.get("/api/market/movers")
+async def get_market_movers(_user=Depends(require_auth)):
+    global _movers_cache
+    import time
+    now = time.time()
+    if _movers_cache["data"] and (now - _movers_cache["last_updated"]) < 300:
+        return _movers_cache["data"]
+        
+    try:
+        import yfinance as yf
+        # A broader list of NIFTY 50 and popular stocks
+        tickers = {
+            "RELIANCE.NS": "Reliance Industries",
+            "TCS.NS": "Tata Consultancy Services",
+            "HDFCBANK.NS": "HDFC Bank Ltd",
+            "INFY.NS": "Infosys Limited",
+            "ICICIBANK.NS": "ICICI Bank Ltd",
+            "SBIN.NS": "State Bank of India",
+            "BHARTIARTL.NS": "Bharti Airtel",
+            "ITC.NS": "ITC Limited",
+            "LARSEN.NS": "Larsen & Toubro",
+            "KOTAKBANK.NS": "Kotak Mahindra Bank",
+            "AXISBANK.NS": "Axis Bank Ltd",
+            "BAJFINANCE.NS": "Bajaj Finance Ltd",
+            "HINDUNILVR.NS": "Hindustan Unilever",
+            "ASIANPAINT.NS": "Asian Paints Ltd",
+            "MARUTI.NS": "Maruti Suzuki",
+            "SUNPHARMA.NS": "Sun Pharma",
+            "TITAN.NS": "Titan Company",
+            "ULTRACEMCO.NS": "UltraTech Cement",
+            "TATASTEEL.NS": "Tata Steel",
+            "NTPC.NS": "NTPC Ltd"
+        }
+        
+        symbols_list = list(tickers.keys())
+        data = await asyncio.to_thread(yf.download, symbols_list, period="5d", interval="1d", progress=False, timeout=10)
+        
+        results = []
+        if not data.empty and 'Close' in data and 'Volume' in data:
+            close_df = data['Close']
+            vol_df = data['Volume']
+            
+            for symbol, label in tickers.items():
+                if symbol not in close_df.columns:
+                    continue
+                
+                prices = close_df[symbol].dropna().tolist()
+                volumes = vol_df[symbol].dropna().tolist() if symbol in vol_df.columns else []
+                if len(prices) < 2:
+                    continue
+                
+                current_price = prices[-1]
+                prev_price = prices[-2]
+                change = current_price - prev_price
+                change_pct = (change / prev_price) * 100 if prev_price > 0 else 0
+                
+                vol = volumes[-1] if len(volumes) > 0 else 0
+                vol_str = f"{vol/1000000:.1f}M" if vol >= 1000000 else f"{vol/1000:.1f}K"
+                
+                item = {
+                    "symbol": symbol,
+                    "name": label,
+                    "price": f"₹{current_price:,.2f}",
+                    "change": f"{'+' if change_pct >= 0 else ''}{change_pct:.2f}%",
+                    "changeNum": change_pct,
+                    "diff": f"{'+' if change >= 0 else '-'}₹{abs(change):.2f}",
+                    "vol": vol_str
+                }
+                results.append(item)
+                
+        # Sort and split
+        sorted_results = sorted(results, key=lambda x: x["changeNum"], reverse=True)
+        gainers = [x for x in sorted_results if x["changeNum"] >= 0][:6]
+        losers = sorted([x for x in sorted_results if x["changeNum"] < 0], key=lambda x: x["changeNum"])[:6]
+        
+        # Fallback if empty
+        if not gainers and not losers:
+            return {"gainers": [], "losers": []}
+            
+        final_data = {"gainers": gainers, "losers": losers}
+        _movers_cache["data"] = final_data
+        _movers_cache["last_updated"] = now
+        return final_data
+    except Exception as e:
+        print(f"Error fetching market movers data: {e}")
+        return {"gainers": [], "losers": []}
+
+_treemap_cache = {"data": None, "last_updated": 0}
+
+@app.get("/api/market/treemap")
+async def get_market_treemap(_user=Depends(require_auth)):
+    global _treemap_cache
+    import time
+    now = time.time()
+    if _treemap_cache["data"] and (now - _treemap_cache["last_updated"]) < 300:
+        return _treemap_cache["data"]
+        
+    try:
+        import yfinance as yf
+        # Grouped by sector for the treemap
+        stocks_info = [
+            {"sym": "HDFCBANK.NS", "name": "HDFCBANK", "sector": "Finance", "mcap": 12000},
+            {"sym": "ICICIBANK.NS", "name": "ICICIBANK", "sector": "Finance", "mcap": 8000},
+            {"sym": "SBIN.NS", "name": "SBIN", "sector": "Finance", "mcap": 6000},
+            {"sym": "KOTAKBANK.NS", "name": "KOTAKBANK", "sector": "Finance", "mcap": 4000},
+            {"sym": "AXISBANK.NS", "name": "AXISBANK", "sector": "Finance", "mcap": 3500},
+            
+            {"sym": "RELIANCE.NS", "name": "RELIANCE", "sector": "Energy minerals", "mcap": 18000},
+            {"sym": "ONGC.NS", "name": "ONGC", "sector": "Energy minerals", "mcap": 3000},
+            
+            {"sym": "TCS.NS", "name": "TCS", "sector": "Technology services", "mcap": 14000},
+            {"sym": "INFY.NS", "name": "INFY", "sector": "Technology services", "mcap": 7000},
+            {"sym": "HCLTECH.NS", "name": "HCLTECH", "sector": "Technology services", "mcap": 3500},
+            {"sym": "WIPRO.NS", "name": "WIPRO", "sector": "Technology services", "mcap": 2500},
+            
+            {"sym": "TITAN.NS", "name": "TITAN", "sector": "Consumer durables", "mcap": 3000},
+            {"sym": "M&M.NS", "name": "M_M", "sector": "Consumer durables", "mcap": 3500},
+            
+            {"sym": "BHARTIARTL.NS", "name": "BHARTIARTL", "sector": "Communications", "mcap": 7000},
+            
+            {"sym": "ADANIPORTS.NS", "name": "ADANIPORTS", "sector": "Transportation", "mcap": 2500},
+            {"sym": "EICHERMOT.NS", "name": "EICHERMOT", "sector": "Transportation", "mcap": 1500},
+            
+            {"sym": "NTPC.NS", "name": "NTPC", "sector": "Utilities", "mcap": 3000},
+            {"sym": "POWERGRID.NS", "name": "POWERGRID", "sector": "Utilities", "mcap": 2500},
+            
+            {"sym": "ULTRACEMCO.NS", "name": "ULTRACEMCO", "sector": "Non-energy minerals", "mcap": 2500},
+            {"sym": "TATASTEEL.NS", "name": "TATASTEEL", "sector": "Non-energy minerals", "mcap": 2000},
+            
+            {"sym": "LT.NS", "name": "LT", "sector": "Industrial services", "mcap": 5000},
+            
+            {"sym": "ITC.NS", "name": "ITC", "sector": "Consumer non-durables", "mcap": 5500},
+            {"sym": "HINDUNILVR.NS", "name": "HINDUNILVR", "sector": "Consumer non-durables", "mcap": 5000},
+            
+            {"sym": "SUNPHARMA.NS", "name": "SUNPHARMA", "sector": "Health technology", "mcap": 3500}
+        ]
+        
+        symbols_list = [s["sym"] for s in stocks_info]
+        data = await asyncio.to_thread(yf.download, symbols_list, period="3d", interval="1d", progress=False, timeout=10)
+        
+        results = []
+        if not data.empty and 'Close' in data:
+            close_df = data['Close']
+            
+            for s in stocks_info:
+                sym = s["sym"]
+                if sym not in close_df.columns:
+                    continue
+                    
+                prices = close_df[sym].dropna().tolist()
+                if len(prices) < 2:
+                    continue
+                
+                current_price = prices[-1]
+                prev_price = prices[-2]
+                change_pct = ((current_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
+                
+                s["price"] = round(current_price, 2)
+                s["change_pct"] = round(change_pct, 2)
+                results.append(s)
+                
+        _treemap_cache["data"] = results
+        _treemap_cache["last_updated"] = now
+        return results
+    except Exception as e:
+        print(f"Error fetching treemap data: {e}")
+        return []
+
 @app.get("/api/opportunities")
 async def get_opportunities(_user=Depends(require_auth)):
     """Return the latest investment opportunities from DB."""
@@ -1328,6 +1523,16 @@ async def refresh_briefing_endpoint(_user=Depends(require_auth)):
         import agents
         import asyncio
         asyncio.create_task(agents.news_scanner_cycle())
+        return {"status": "refreshing"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/refresh_indian_market")
+async def refresh_indian_market_endpoint(_user=Depends(require_auth)):
+    try:
+        import agents
+        import asyncio
+        asyncio.create_task(agents.indian_market_tracker_cycle())
         return {"status": "refreshing"}
     except Exception as e:
         return {"error": str(e)}

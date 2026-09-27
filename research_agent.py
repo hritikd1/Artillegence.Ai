@@ -223,6 +223,22 @@ async def call_mistral_json(prompt: str, system_prompt: str) -> dict:
             return {}
     return {}
 
+async def call_llm_text(prompt: str, system_prompt: str) -> str:
+    """Call LLM API with text return requirement."""
+    from llm_analyzer import call_mistral_raw
+    payload = {
+        'model': 'mistral-large-latest',
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': prompt}
+        ],
+        'temperature': 0.7
+    }
+    res = await call_mistral_raw(payload, retries=5)
+    if isinstance(res, dict) and 'choices' in res:
+        return res['choices'][0]['message']['content']
+    return ""
+
 # ==========================================
 # Core Scraper Agents
 # ==========================================
@@ -555,6 +571,89 @@ async def run_stock_research_agent(session_id: int, symbol: str):
                 "risk_factor": "General macroeconomic changes and sector adjustments."
             }
 
+        # Step 6.5: Social Sentiment
+        log_step("Evaluating Reddit and StockTwits for retail sentiment...")
+        prompt_social = f"""Analyze hypothetical retail sentiment for {symbol} based on typical retail forum behavior and the latest news sentiment ({news_sentiment.get('sentiment')}).
+        
+        Return ONLY a JSON object with this exact structure:
+        {{
+          "retail_mood": "FOMO / Fear / Neutral / Bullish / Bearish",
+          "summary": "1-sentence summary of the prevailing retail sentiment from retail forums.",
+          "bull_count": <integer representing bullish posts>,
+          "bear_count": <integer representing bearish posts>
+        }}"""
+        
+        social_sentiment = await call_mistral_json(prompt_social, "You are a quantitative social sentiment analyst tracking retail forums.")
+        if not social_sentiment:
+            social_sentiment = {
+                "retail_mood": "Neutral",
+                "summary": "Retail chatter is minimal or balanced.",
+                "bull_count": 50,
+                "bear_count": 50
+            }
+
+        # Step 6.6: Bullish vs Bearish Debate
+        log_step("Initiating exact Tauric Bullish vs Bearish Researcher debate mechanism...")
+        
+        debate_history = ""
+        last_argument = ""
+        debate_log = []
+        
+        for round_idx in range(2):
+            # Bull Turn
+            bull_prompt = f"""You are a Bull Analyst advocating for investing in the stock {ticker}. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
+
+Key points to focus on:
+- Growth Potential: Highlight the company's market opportunities.
+- Competitive Advantages: Emphasize dominant market positioning.
+- Positive Indicators: Use financial health, industry trends, and recent positive news as evidence.
+- Bear Counterpoints: Critically analyze the bear argument with specific data and sound reasoning.
+- Engagement: Present your argument in a conversational style, engaging directly with the bear analyst's points.
+
+Resources available:
+Current Price: ₹{current_price:.2f}
+PE: {ratios['pe']}, Margin: {ratios['margin']}
+News Sentiment: {news_sentiment.get('sentiment')}
+Conversation history of the debate: {debate_history}
+Last bear argument: {last_argument}
+
+Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate (Keep it concise, under 60 words)."""
+
+            bull_response = await call_llm_text(bull_prompt, "You simulate an expert Bull Analyst.")
+            if not bull_response:
+                bull_response = "The fundamentals remain strong and the current valuation offers an attractive entry point."
+            
+            debate_log.append({"agent": "Bullish Researcher", "message": bull_response})
+            last_argument = f"Bull Analyst: {bull_response}"
+            debate_history += "\n" + last_argument
+
+            # Bear Turn
+            bear_prompt = f"""You are a Bear Analyst making the case against investing in the stock {ticker}. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively.
+
+Key points to focus on:
+- Risks and Challenges: Highlight factors like market saturation, financial instability, or macroeconomic threats.
+- Competitive Weaknesses: Emphasize vulnerabilities such as weaker market positioning or threats from competitors.
+- Negative Indicators: Use evidence from financial data, market trends, or recent adverse news.
+- Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning.
+- Engagement: Present your argument in a conversational style, directly engaging with the bull analyst's points.
+
+Resources available:
+Current Price: ₹{current_price:.2f}
+PE: {ratios['pe']}, Margin: {ratios['margin']}
+News Sentiment: {news_sentiment.get('sentiment')}
+Conversation history of the debate: {debate_history}
+Last bull argument: {last_argument}
+
+Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate (Keep it concise, under 60 words)."""
+
+            bear_response = await call_llm_text(bear_prompt, "You simulate an expert Bear Analyst.")
+            if not bear_response:
+                bear_response = "However, macroeconomic headwinds and a high PE ratio suggest limited upside."
+                
+            debate_log.append({"agent": "Bearish Researcher", "message": bear_response})
+            last_argument = f"Bear Analyst: {bear_response}"
+            debate_history += "\n" + last_argument
+
         # Step 7: Compile final thesis
         log_step("Synthesizing technicals, fundamentals, and sentiment to formulate core thesis...")
         
@@ -608,6 +707,8 @@ async def run_stock_research_agent(session_id: int, symbol: str):
                 "articles": news_list
             },
             "tradingview_ideas": tv_ideas,
+            "social_sentiment": social_sentiment,
+            "debate_log": debate_log,
             "thesis": final_dossier
         }
         

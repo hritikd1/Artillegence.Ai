@@ -461,8 +461,39 @@ class StockForecaster:
 
         # Fetch symbol learned stats from DB
         learned_stats = database.get_forecast_stats_for_symbol(self.symbol)
+        
+        # Calculate Supertrends
+        temp_df = df.copy()
+        temp_df.set_index('date', inplace=True)
+        # Calculate Supertrend 1W
+        df_weekly = temp_df.resample('W').agg({
+            'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
+        }).dropna()
+        df_weekly = df_weekly.rename(columns={'high': 'High', 'low': 'Low', 'close': 'Close'})
+        if not df_weekly.empty:
+            from api import calculate_supertrend
+            st_weekly = calculate_supertrend(df_weekly, period=10, multiplier=1.7)
+            df['supertrend_1w'] = st_weekly['supertrend'].reindex(temp_df.index, method='ffill').values
+            df['supertrend_1w_dir'] = st_weekly['direction'].reindex(temp_df.index, method='ffill').values
+        else:
+            df['supertrend_1w'] = np.nan
+            df['supertrend_1w_dir'] = np.nan
 
-        hist_view = df.tail(150)
+        # Calculate Supertrend 5W
+        df_5weekly = temp_df.resample('5W').agg({
+            'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
+        }).dropna()
+        df_5weekly = df_5weekly.rename(columns={'high': 'High', 'low': 'Low', 'close': 'Close'})
+        if not df_5weekly.empty:
+            from api import calculate_supertrend
+            st_5weekly = calculate_supertrend(df_5weekly, period=10, multiplier=1.7)
+            df['supertrend_5w'] = st_5weekly['supertrend'].reindex(temp_df.index, method='ffill').values
+            df['supertrend_5w_dir'] = st_5weekly['direction'].reindex(temp_df.index, method='ffill').values
+        else:
+            df['supertrend_5w'] = np.nan
+            df['supertrend_5w_dir'] = np.nan
+
+        hist_view = df
         def clean_series(series): return [None if pd.isna(x) else float(x) for x in series]
         def clean_bool_series(series): return [None if pd.isna(x) else bool(x) for x in series]
 
@@ -483,6 +514,10 @@ class StockForecaster:
                 "adx": clean_series(hist_view['adx']),
                 "plus_di": clean_series(hist_view['plus_di']),
                 "minus_di": clean_series(hist_view['minus_di']),
+                "supertrend_1w": clean_series(hist_view['supertrend_1w']),
+                "supertrend_1w_dir": clean_series(hist_view['supertrend_1w_dir']),
+                "supertrend_5w": clean_series(hist_view['supertrend_5w']),
+                "supertrend_5w_dir": clean_series(hist_view['supertrend_5w_dir']),
             },
             "forecast": {
                 "date": forecast_dates,

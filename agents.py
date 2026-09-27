@@ -1767,6 +1767,7 @@ async def run_agent_loop(name: str, fn, interval_min: int):
     # Auto-register if not in status dict (prevents KeyError crash)
     if name not in agent_status:
         agent_status[name] = {"status": "idle", "last_run": None, "cycle_count": 0}
+        
     # Removed initial sleep to speed up first-run intelligence population
     while True:
         try:
@@ -1784,11 +1785,11 @@ async def run_agent_loop(name: str, fn, interval_min: int):
 async def start_all_agents():
     # Slightly offset the runtimes so we don't hit mistral/telegram rate limits at exactly the same time
     await asyncio.gather(
-        run_agent_loop("news_scanner",            news_scanner_cycle,            interval_min=15),
+        run_agent_loop("news_scanner",            news_scanner_cycle,            interval_min=1440),
         # run_agent_loop("market_analyzer",         market_analyzer_cycle,         interval_min=60),
         run_agent_loop("opportunity_finder",      opportunity_finder_cycle,      interval_min=60),
         # run_agent_loop("trending_tracker",        trending_tracker_cycle,        interval_min=30),
-        run_agent_loop("indian_market_tracker",   indian_market_tracker_cycle,   interval_min=30),
+        run_agent_loop("indian_market_tracker",   indian_market_tracker_cycle,   interval_min=1440),
         run_agent_loop("telegram_scanner",        telegram_scanner_cycle,        interval_min=15),
         run_agent_loop("visual_researcher",       visual_research_cycle,         interval_min=45),
         run_agent_loop("google_news_scanner",     google_news_scanner_cycle,     interval_min=15),
