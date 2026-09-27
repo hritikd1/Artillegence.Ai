@@ -25,7 +25,7 @@ export default function InfiniteSpaceView({
   onSelectEvent: (e: GeoEvent) => void;
   selectedEvent: GeoEvent | null;
 }) {
-  const globeEl = useRef<any>();
+  const globeEl = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const containerRef = useRef<HTMLDivElement>(null);
 
