@@ -599,15 +599,7 @@ export function LiveTreemap() {
 
 function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
   const eventsArr = Array.isArray(events) ? events : [];
-  const [marketPerformance, setMarketPerformance] = useState<any>(null);
 
-  useEffect(() => {
-    apiGet<any>('/api/market/performance').then(res => {
-      if (res && res.sectors) {
-        setMarketPerformance(res);
-      }
-    }).catch(console.error);
-  }, []);
 
   // 1. Top High Impact Events (Critical & High severity, sorted by timestamp desc)
   const highImpactEvents = useMemo(() => {
