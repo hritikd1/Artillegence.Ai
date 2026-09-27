@@ -621,24 +621,7 @@ function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent
       .slice(0, 3);
   }, [eventsArr]);
 
-  // Sector Heatmap Data Matrix
-  const sectorHeatmapData = useMemo(() => {
-    if (!marketPerformance || !marketPerformance.sectors) return [];
-    return marketPerformance.sectors.map((s: any) => {
-      let bias = 'Neutral';
-      if (s.change_pct > 3) bias = 'Surge';
-      else if (s.change_pct > 0) bias = 'Bullish';
-      else if (s.change_pct < -2) bias = 'High Risk';
-      else if (s.change_pct < 0) bias = 'Soft';
 
-      return {
-        name: s.name,
-        change_pct: s.change_pct,
-        topTicker: s.symbol,
-        bias: bias
-      };
-    });
-  }, [marketPerformance]);
 
 
 
