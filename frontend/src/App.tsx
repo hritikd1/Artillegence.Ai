@@ -4,7 +4,7 @@ import {
   Lightbulb, BarChart3, ExternalLink, Flame, IndianRupee,
   RefreshCw, Clock, Globe, AlertTriangle,
   DollarSign, Newspaper, Zap, Target, ArrowRight, Shield, X,
-  Calendar, Star, Users, MessageSquare
+  Calendar, Users, MessageSquare
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TelegramFeed from './TelegramFeed'
@@ -599,7 +599,6 @@ export function LiveTreemap() {
 
 function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
   const eventsArr = Array.isArray(events) ? events : [];
-  const [heatmapFilter, setHeatmapFilter] = useState<'all' | 'gainers' | 'risk'>('all');
   const [marketPerformance, setMarketPerformance] = useState<any>(null);
 
   useEffect(() => {
@@ -639,13 +638,8 @@ function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent
         bias: bias
       };
     });
+    });
   }, [marketPerformance]);
-
-  const filteredHeatmapSectors = useMemo(() => {
-    if (heatmapFilter === 'gainers') return sectorHeatmapData.filter(s => s.change_pct >= 0);
-    if (heatmapFilter === 'risk') return sectorHeatmapData.filter(s => s.change_pct < 0);
-    return sectorHeatmapData;
-  }, [heatmapFilter, sectorHeatmapData]);
 
 
 
