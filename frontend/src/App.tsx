@@ -638,7 +638,6 @@ function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent
         bias: bias
       };
     });
-    });
   }, [marketPerformance]);
 
 
