@@ -120,6 +120,123 @@ export function isValidCoordinate(lat: any, lng: any): boolean {
     return !isNaN(l) && !isNaN(n) && l >= -90 && l <= 90 && n >= -180 && n <= 180;
 }
 
+// Structured Intelligence Parser & Renderer for Map Popup
+function StructuredEventSummary({ summary }: { summary: string }) {
+    if (!summary) return null;
+
+    const isCustomSearchResult = summary.includes("Direct Search Results") || summary.includes("Latest News:") || summary.includes("Web Snippets:");
+
+    if (!isCustomSearchResult) {
+        return (
+            <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed mb-1 whitespace-pre-wrap font-sans">
+                {summary}
+            </p>
+        );
+    }
+
+    // Parse sections
+    const lines = summary.split('\n');
+    let currentSection: 'header' | 'news' | 'snippets' = 'header';
+    let queryTitle = '';
+    const newsItems: { source: string; title: string; date?: string }[] = [];
+    const snippets: string[] = [];
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        if (line.toLowerCase().startsWith("direct search results for")) {
+            const match = line.match(/direct search results for ['"](.*?)['"]/i);
+            queryTitle = match ? match[1] : line.replace(/^direct search results for\s*/i, '');
+            continue;
+        }
+        if (line.toLowerCase().startsWith("latest news:")) {
+            currentSection = 'news';
+            continue;
+        }
+        if (line.toLowerCase().startsWith("web snippets:")) {
+            currentSection = 'snippets';
+            continue;
+        }
+
+        if (currentSection === 'news') {
+            const match = line.match(/^[-*]\s*\[(.*?)\]\s*(.*?)(?:\s*\((.*?)\))?$/);
+            if (match) {
+                let cleanTitle = match[2].trim();
+                cleanTitle = cleanTitle.replace(new RegExp(`\\s*-\\s*${match[1]}\\s*$`, 'i'), '');
+                newsItems.push({
+                    source: match[1].trim(),
+                    title: cleanTitle,
+                    date: match[3]?.trim()
+                });
+            } else if (line.startsWith('-') || line.startsWith('*')) {
+                newsItems.push({
+                    source: 'News',
+                    title: line.replace(/^[-*]\s*/, '').trim()
+                });
+            }
+        } else if (currentSection === 'snippets') {
+            const cleanSnippet = line.replace(/^[-*]\s*/, '').trim();
+            if (cleanSnippet && !cleanSnippet.toLowerCase().includes("no web snippets found")) {
+                snippets.push(cleanSnippet);
+            }
+        }
+    }
+
+    return (
+        <div className="flex flex-col gap-2.5 mt-2 max-h-[300px] overflow-y-auto scrollbar-thin pr-1 text-left">
+            {queryTitle && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-500/10 border border-sky-500/20 rounded-md">
+                    <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider">Radar:</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 capitalize">{queryTitle}</span>
+                </div>
+            )}
+
+            {newsItems.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-extrabold tracking-widest uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                        📰 Intel Headlines ({newsItems.length})
+                    </span>
+                    <div className="flex flex-col gap-1.5">
+                        {newsItems.map((item, idx) => (
+                            <div key={idx} className="p-2 rounded-lg bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 hover:border-sky-500/40 transition-all flex flex-col gap-1">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300/40 dark:border-sky-800/40 uppercase tracking-tight">
+                                        {item.source}
+                                    </span>
+                                    {item.date && (
+                                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
+                                            {item.date}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+                                    {item.title}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {snippets.length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-slate-200 dark:border-slate-700/50">
+                    <span className="text-[10px] font-extrabold tracking-widest uppercase text-slate-600 dark:text-slate-300">
+                        🔍 Key Data Snippets
+                    </span>
+                    <div className="space-y-1.5">
+                        {snippets.map((snip, idx) => (
+                            <div key={idx} className="p-2 text-xs leading-relaxed text-slate-800 dark:text-slate-200 bg-amber-500/10 border-l-2 border-amber-500 rounded-r-md">
+                                {snip}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Helper: fly to a filtered category's first event
 function FlyToCategory({ targetEvent, markerRefs }: { targetEvent: GeoEvent | null, markerRefs: React.MutableRefObject<{ [key: string]: L.Marker }> }) {
     const map = useMap();
@@ -641,7 +758,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
     }, [geoJsonData, displayEvents, getCountryColor]);
 
     return (
-        <div className="relative w-full rounded-lg overflow-hidden border border-slate-800/80 shadow-2xl" style={{ height: '500px' }}>
+        <div className="relative w-full rounded-lg overflow-hidden border border-[var(--color-border)] shadow-2xl" style={{ height: '500px' }}>
             <MapContainer
                 center={[20, 78]}
                 zoom={4}
@@ -719,7 +836,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                             }}
                         >
                             <Popup className="glass-popup pb-2" autoPan={true} autoPanPaddingTopLeft={[10, 88]} autoPanPaddingBottomRight={[10, 70]}>
-                                <div className={`bg-slate-900/95 border p-4 rounded-lg shadow-xl shadow-black/50 -m-3 overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50 w-[400px] max-h-[400px]' : 'border-slate-700 w-[350px] max-h-[400px]'}`}>
+                                <div className={`bg-[var(--color-card)] border p-4 rounded-lg shadow-xl shadow-black/50 -m-3 overflow-y-auto scrollbar-thin ${ev.isCustom ? 'border-amber-500/50 w-[400px] max-h-[400px]' : 'border-[var(--color-border)] w-[350px] max-h-[400px]'}`}>
                                     <div className="flex items-center gap-2 mb-2 justify-between">
                                         <div className="flex items-center gap-2">
                                             {ev.isCustom ? (
@@ -749,7 +866,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                             {!activeAnalysis[ev.id] && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleAnalyze(ev); }}
-                                                    className="ml-auto text-[10px] bg-indigo-600/80 hover:bg-indigo-50 text-white px-2 py-0.5 rounded shadow cursor-pointer border border-indigo-450/40 flex items-center gap-0.5 font-bold tracking-wide">
+                                                    className="ml-auto text-[10px] bg-indigo-600/80 hover:bg-indigo-50 text-[var(--color-text-main)] px-2 py-0.5 rounded shadow cursor-pointer border border-indigo-450/40 flex items-center gap-0.5 font-bold tracking-wide">
                                                     ANALYZE
                                                 </button>
                                             )}
@@ -757,45 +874,29 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                     </div>
 
                                     {activeAnalysis[ev.id] ? (
-                                        <div className="mt-3 bg-slate-800/50 p-3 rounded border border-indigo-500/30 font-mono">
+                                        <div className="mt-3 bg-[var(--color-card)] p-3 rounded border border-indigo-500/30 font-mono">
                                             {activeAnalysis[ev.id].loading ? (
                                                 <div className="flex flex-col items-center justify-center py-4 space-y-2">
                                                     <div className="animate-spin w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
                                                     <span className="text-[10px] text-indigo-300 font-mono animate-pulse uppercase tracking-wider">Mistral AI Modeling...</span>
                                                 </div>
                                             ) : (
-                                                <div className="text-[10px] text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                                <div className="text-[10px] text-[var(--color-text-main)] leading-relaxed whitespace-pre-wrap">
                                                     {activeAnalysis[ev.id].text}
                                                 </div>
                                             )}
-                                            <button onClick={() => setActiveAnalysis(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} className="mt-3 w-full text-center text-[9px] text-slate-500 hover:text-slate-300 border border-slate-700 rounded py-0.5">RETURN TO SOURCE</button>
+                                            <button onClick={() => setActiveAnalysis(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} className="mt-3 w-full text-center text-[9px] text-[var(--color-text-main)] hover:text-[var(--color-text-main)] border border-[var(--color-border)] rounded py-0.5">RETURN TO SOURCE</button>
                                         </div>
                                     ) : (
                                         <>
                                             {ev.image_base64 && (
-                                                <div className="mt-3 mb-2 rounded overflow-hidden border border-slate-700/60 shadow-lg">
+                                                <div className="mt-3 mb-2 rounded overflow-hidden border border-[var(--color-border)] shadow-lg">
                                                     <img src={`data:image/jpeg;base64,${ev.image_base64}`} alt="Scraped View" className="w-full h-auto opacity-90" />
                                                 </div>
                                             )}
                                             <>
-                                                <h4 className="text-xs font-bold text-white leading-tight mb-2 pb-1 border-b border-slate-700/50">{ev.headline}</h4>
-                                                {ev.category === '⭐ User Custom' ? (
-                                                    <div className="mt-2 rounded overflow-hidden h-[280px] bg-white relative">
-                                                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center text-slate-800 text-xs font-bold pointer-events-none">
-                                                            Loading Browser...
-                                                        </div>
-                                                        <iframe
-                                                            src={`https://www.google.com/search?igu=1&q=${encodeURIComponent(ev.headline.replace(/Monitoring:\s*/i, ''))}`}
-                                                            className="w-full h-full border-0 relative z-10"
-                                                            title="In-App Browser"
-                                                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-[10px] text-slate-300 leading-relaxed mb-1 whitespace-pre-wrap">
-                                                        {ev.summary}
-                                                    </p>
-                                                )}
+                                                <h4 className="text-xs md:text-sm font-extrabold text-[var(--color-text-main)] leading-tight mb-2 pb-1 border-b border-[var(--color-border)]">{ev.headline}</h4>
+                                                <StructuredEventSummary summary={ev.summary} />
 
                                                 {(() => {
                                                     const rawSource = typeof ev.source === "string" ? ev.source.replace("Telegram: ", "") : "CIG_telegram";
@@ -811,7 +912,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                                     if (ev.video) return renderNewsVideo(ev.video);
                                                     if (ev.image) {
                                                         return (
-                                                            <div className="mt-2 rounded overflow-hidden max-h-32 bg-slate-950/80 flex items-center justify-center border border-slate-750/40">
+                                                            <div className="mt-2 rounded overflow-hidden max-h-32 bg-[var(--color-card)] flex items-center justify-center border border-slate-750/40">
                                                                 <img
                                                                     src={ev.image}
                                                                     alt=""
@@ -827,12 +928,12 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                         </>
                                     )}
 
-                                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800">
+                                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--color-border)]">
                                         <a href={ev.url} target="_blank" rel="noopener noreferrer"
                                             className="text-[9px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
                                             SOURCE <ExternalLink size={8} />
                                         </a>
-                                        <span className="text-[8px] text-slate-500">
+                                        <span className="text-[8px] text-[var(--color-text-main)]">
                                             {new Date(ev.timestamp).toLocaleTimeString()}
                                         </span>
                                     </div>
@@ -844,7 +945,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
             </MapContainer>
 
             {/* Overlay: Event Count, Categories + Custom Watchlist */}
-            <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 px-3 py-1.5 rounded flex flex-col gap-2 z-[1000] pointer-events-auto transition-all shadow-xl" style={{ maxWidth: '380px' }}>
+            <div className="absolute top-3 left-3 bg-[var(--color-card)] backdrop-blur-md border border-[var(--color-border)] px-3 py-1.5 rounded flex flex-col gap-2 z-[1000] pointer-events-auto transition-all shadow-xl" style={{ maxWidth: '380px' }}>
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         <MapPin size={12} className="text-sky-400" />
@@ -866,7 +967,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
 
                 {/* Add Custom Watchlist Input */}
                 {showAddForm && (
-                    <div className="border-t border-slate-700/50 pt-2 animate-fade-in">
+                    <div className="border-t border-[var(--color-border)] pt-2 animate-fade-in">
                         <div className="flex gap-1.5">
                             <input
                                 type="text"
@@ -874,14 +975,14 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                 onChange={(e) => setCustomInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
                                 placeholder="e.g. Reliance, Gold, Tesla, Crude Oil..."
-                                className="flex-1 bg-slate-800/80 border border-slate-600 rounded px-2 py-1.5 text-[10px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
+                                className="flex-1 bg-[var(--color-card)] border border-slate-600 rounded px-2 py-1.5 text-[10px] text-[var(--color-text-main)] placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
                                 autoFocus
                             />
                             <button
                                 id="btn-track-custom"
                                 onClick={handleAddCustom}
                                 disabled={!customInput.trim() || isSearching}
-                                className="px-2 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 rounded text-white text-[9px] font-bold border border-amber-500/50 flex items-center gap-1 whitespace-nowrap min-w-[70px] justify-center"
+                                className="px-2 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 rounded text-[var(--color-text-main)] text-[9px] font-bold border border-amber-500/50 flex items-center gap-1 whitespace-nowrap min-w-[70px] justify-center"
                             >
                                 {isSearching ? (
                                     <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -911,10 +1012,10 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
 
                 {/* Category Filters */}
                 {categories.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1 border-t border-slate-700/50 pt-2">
+                    <div className="flex flex-wrap gap-1 mt-1 border-t border-[var(--color-border)] pt-2">
                         <button
                             onClick={() => handleCategoryClick(null)}
-                            className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded transition-colors ${activeCategory === null ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                            className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded transition-colors ${activeCategory === null ? 'bg-sky-600 text-[var(--color-text-main)]' : 'bg-[var(--color-card)] text-[var(--color-text-main)] hover:bg-slate-700'}`}>
                             ALL
                         </button>
                         {categories.map(c => (
@@ -922,8 +1023,8 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
                                 key={c}
                                 onClick={() => handleCategoryClick(c)}
                                 className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded transition-colors ${activeCategory === c
-                                    ? (c === '⭐ User Custom' ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white')
-                                    : (c === '⭐ User Custom' ? 'bg-amber-900/40 text-amber-400 hover:bg-amber-800/50 border border-amber-700/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700')
+                                    ? (c === '⭐ User Custom' ? 'bg-amber-600 text-[var(--color-text-main)]' : 'bg-sky-600 text-[var(--color-text-main)]')
+                                    : (c === '⭐ User Custom' ? 'bg-amber-900/40 text-amber-400 hover:bg-amber-800/50 border border-amber-700/30' : 'bg-[var(--color-card)] text-[var(--color-text-main)] hover:bg-slate-700')
                                     }`}>
                                 {c}
                             </button>
@@ -958,7 +1059,7 @@ export default function EarthMap({ events, onAddCustomEvent, onSelectEvent, sele
             `}</style>
 
             {/* Overlay: Legend */}
-            <div className="absolute bottom-6 right-6 bg-slate-950/85 backdrop-blur-md border border-slate-800/80 px-4 py-2 rounded-xl shadow-2xl z-[1000] flex items-center gap-4 pointer-events-auto border-1">
+            <div className="absolute bottom-6 right-6 bg-[var(--color-card)] backdrop-blur-md border border-[var(--color-border)] px-4 py-2 rounded-xl shadow-2xl z-[1000] flex items-center gap-4 pointer-events-auto border-1">
                 <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></div>
                     <span className="text-[10px] font-bold text-slate-350 uppercase tracking-wider">Low Impact</span>

@@ -118,36 +118,36 @@ export default function WatchlistTab() {
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Star className="text-amber-400" size={20} /> MY WATCHLIST
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+            <Star className="text-amber-500 dark:text-amber-400" size={26} /> MY WATCHLIST
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Track your favorite stocks with live prices and AI analysis</p>
+          <p className="text-sm md:text-base text-slate-600 dark:text-slate-500 mt-1">Track your favorite stocks with live prices and AI analysis</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Stats pills */}
-          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5">
-            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Tracking</span>
-            <span className="text-sm font-bold text-white">{symbols.length}</span>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 shadow-xs">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-500 tracking-wider uppercase">Tracking</span>
+            <span className="text-base font-black text-slate-900 dark:text-white">{symbols.length}</span>
           </div>
-          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5">
-            <TrendingUp size={12} className="text-emerald-400" />
-            <span className="text-sm font-bold text-emerald-400">{gainers}</span>
-            <span className="text-slate-600 mx-0.5">/</span>
-            <TrendingDown size={12} className="text-rose-400" />
-            <span className="text-sm font-bold text-rose-400">{losers}</span>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 shadow-xs">
+            <TrendingUp size={14} className="text-emerald-500" />
+            <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{gainers}</span>
+            <span className="text-slate-400 mx-0.5">/</span>
+            <TrendingDown size={14} className="text-rose-500" />
+            <span className="text-base font-black text-rose-600 dark:text-rose-400">{losers}</span>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-neonBlue hover:bg-neonBlue/80 text-black font-bold text-xs rounded-lg transition cursor-pointer uppercase tracking-wider"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs md:text-sm rounded-xl transition cursor-pointer uppercase tracking-wider shadow-sm"
           >
-            <Plus size={14} /> Add Stock
+            <Plus size={16} /> Add Stock
           </button>
           <button
             onClick={fetchPrices}
             disabled={loading}
-            className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-400 transition cursor-pointer"
+            className="p-2.5 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition cursor-pointer"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin text-neonBlue' : ''} />
+            <RefreshCw size={16} className={loading ? 'animate-spin text-sky-500' : ''} />
           </button>
         </div>
       </div>
@@ -161,29 +161,29 @@ export default function WatchlistTab() {
           return (
             <div
               key={sym}
-              className="glass-panel p-4 flex flex-col gap-3 border border-slate-800/80 bg-slate-950/40 hover:border-neonBlue/30 transition group"
+              className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/40 hover:border-sky-500/40 dark:hover:border-neonBlue/30 transition-all rounded-xl shadow-sm hover:shadow-md group"
             >
               {/* Top row: symbol + actions */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${data?.is_positive ? 'bg-emerald-500' : data ? 'bg-rose-500' : 'bg-slate-700'}`} />
-                  <span className="text-sm font-black text-white tracking-wider">{sym}</span>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${data?.is_positive ? 'bg-emerald-500' : data ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                  <span className="text-base md:text-lg font-black text-slate-900 dark:text-white tracking-wider">{sym}</span>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                   <button
                     onClick={() => handleAnalyze(sym)}
                     disabled={isAnalyzing}
-                    className="p-1 text-slate-600 hover:text-neonBlue transition cursor-pointer"
+                    className="p-1.5 text-slate-500 hover:text-sky-600 dark:hover:text-neonBlue transition cursor-pointer"
                     title="AI Analysis"
                   >
-                    {isAnalyzing ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
+                    {isAnalyzing ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
                   </button>
                   <button
                     onClick={() => handleRemove(sym)}
-                    className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer"
+                    className="p-1.5 text-slate-500 hover:text-rose-500 transition cursor-pointer"
                     title="Remove"
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -191,28 +191,28 @@ export default function WatchlistTab() {
               {/* Price */}
               {data ? (
                 <div>
-                  <div className="text-lg font-black text-white">₹{data.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  <div className={`text-xs font-bold flex items-center gap-1 ${data.is_positive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {data.is_positive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  <div className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono">₹{data.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                  <div className={`text-xs md:text-sm font-bold flex items-center gap-1 mt-0.5 ${data.is_positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {data.is_positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                     {data.is_positive ? '+' : ''}{data.change_pct.toFixed(2)}%
                   </div>
                 </div>
               ) : (
                 <div className="animate-pulse">
-                  <div className="h-5 bg-slate-800 rounded w-24 mb-1" />
-                  <div className="h-3 bg-slate-800 rounded w-16" />
+                  <div className="h-6 bg-slate-100 dark:bg-slate-800 rounded w-28 mb-1.5" />
+                  <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-20" />
                 </div>
               )}
 
               {/* Name */}
-              <div className="text-[10px] text-slate-500 font-medium truncate">
+              <div className="text-xs md:text-sm text-slate-600 dark:text-slate-400 font-semibold truncate">
                 {data?.name || 'Loading...'}
               </div>
 
               {/* Quick action */}
               <button
                 onClick={() => handleAnalyze(sym)}
-                className="w-full text-center text-[9px] font-bold text-slate-500 hover:text-neonBlue bg-slate-900/40 hover:bg-slate-800/60 border border-slate-800/60 hover:border-neonBlue/30 rounded py-1.5 transition cursor-pointer uppercase tracking-widest"
+                className="w-full text-center text-xs font-bold text-slate-700 dark:text-slate-400 hover:text-sky-600 dark:hover:text-neonBlue bg-slate-50 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800/60 hover:border-sky-500/30 rounded-lg py-2 transition cursor-pointer uppercase tracking-wider"
               >
                 {isAnalyzing ? 'Analyzing...' : '⚡ AI ANALYSIS'}
               </button>

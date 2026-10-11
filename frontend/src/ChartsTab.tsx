@@ -2,10 +2,26 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Search, BrainCircuit, Camera, TrendingUp, TrendingDown,
     Minus, AlertTriangle, Newspaper, RefreshCw, ChevronDown, ChevronUp,
-    Eye, ClipboardPaste, MousePointer, Move, Edit3, Square, Circle as CircleIcon, Eraser, Paperclip, Shield, Activity
+    Eye, ClipboardPaste, MousePointer, Move, Edit3, Square, Circle as CircleIcon, Eraser, Paperclip, Shield, Activity, Send
 } from 'lucide-react';
 import { apiPost, apiGet } from './api';
 import { extractTextFromPdfFile } from './pdfUtils';
+
+/* Helper to render formatted chat messages with bold contrast */
+function formatChatMessage(text: string) {
+    if (!text) return null;
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+                <strong key={i} className="font-extrabold text-slate-900 dark:text-white">
+                    {part.slice(2, -2)}
+                </strong>
+            );
+        }
+        return <span key={i}>{part}</span>;
+    });
+}
 // Static imports removed for production stability
 
 /* ─── Robust Plotly Loader ─── */
@@ -335,10 +351,18 @@ export default function ChartsTab() {
     useEffect(() => {
         if (mistralThesis && forecastData && activeSymbol && activeSymbol !== lastContextSymbol) {
             setLastContextSymbol(activeSymbol);
+            const dir = forecastData?.forecast?.direction;
+            const conf = forecastData?.forecast?.confidence;
+            const corr = forecastData?.backtest?.correlation;
+
+            const forecastBlock = dir && dir !== 'undefined'
+                ? `**Forecast Direction:** ${dir} (Confidence: ${conf || 0}%)\n` +
+                  `**Backtest Correlation:** ${corr !== undefined ? (corr * 100).toFixed(1) : 0}%\n\n`
+                : '';
+
             const contextMsg = `Here is the latest context for **${activeSymbol}**:\n\n` + 
                 `**News & Bias:** ${mistralThesis.bias}\n${mistralThesis.thesis}\n\n` +
-                `**Forecast Direction:** ${forecastData.forecast.direction} (Confidence: ${forecastData.forecast.confidence}%)\n` +
-                `**Backtest Correlation:** ${(forecastData.backtest.correlation * 100).toFixed(1)}%\n\n` +
+                forecastBlock +
                 `You can ask me questions about this stock based on this data!`;
             
             setChatHistory(prev => [...prev, { role: 'assistant', content: contextMsg }]);
@@ -462,8 +486,8 @@ export default function ChartsTab() {
                         <ClipboardPaste className="absolute inset-0 m-auto text-violet-400 animate-pulse" size={22} />
                     </div>
                     <div className="text-center space-y-1">
-                        <p className="text-xl font-bold text-violet-300 tracking-widest animate-pulse">ANALYZING IMAGE...</p>
-                        <p className="text-lg text-slate-500 font-mono">AI Vision scanning chart</p>
+                        <p className="text-xl font-bold text-violet-300 tracking-widest animate-pulse">ANALYZING TECHNICALS...</p>
+                        <p className="text-lg text-slate-500 font-mono">Neural engine scanning chart</p>
                     </div>
                 </div>
             );
@@ -492,19 +516,32 @@ export default function ChartsTab() {
                 );
             }
             return (
-                <div className="space-y-3 animate-fade-in text-xl">
+                <div className="space-y-3 animate-fade-in text-sm">
                     {(chatHistory.length > 0 || isChatting) && (
                         <div className="mt-2 space-y-3 pt-2">
-                            <span className="text-[13px] font-bold text-violet-400 tracking-widest block mb-2">CHAT WITH AI VISION</span>
-                            {chatHistory.map((msg, idx) => (
-                                <div key={idx} className={`p-3 rounded-lg flex flex-col gap-1.5 ${msg.role === 'user' ? 'bg-violet-900/30 border border-violet-800/40 ml-4' : 'bg-slate-800/50 border border-slate-700/50 mr-4'}`}>
-                                    <span className="text-[13px] font-bold text-slate-500 uppercase">{msg.role === 'user' ? 'YOU' : 'AI'}</span>
-                                    <span className="text-slate-300 text-xl whitespace-pre-wrap leading-relaxed">{msg.content}</span>
-                                </div>
-                            ))}
+                            <span className="text-xs font-black text-violet-600 dark:text-violet-400 tracking-wider block mb-2 uppercase">CHAT WITH AI ANALYST</span>
+                            {chatHistory.map((msg, idx) => {
+                                const isUser = msg.role === 'user';
+                                return (
+                                    <div key={idx} className={`p-3.5 rounded-2xl flex flex-col gap-1.5 shadow-sm backdrop-blur-md transition-all ${
+                                        isUser 
+                                            ? 'bg-violet-500/10 dark:bg-violet-900/30 border border-violet-500/30 ml-4 rounded-tr-xs' 
+                                            : 'bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 mr-4 rounded-tl-xs'
+                                    }`}>
+                                        <span className={`text-[11px] font-black uppercase tracking-wider ${
+                                            isUser ? 'text-violet-600 dark:text-violet-400' : 'text-indigo-600 dark:text-sky-400'
+                                        }`}>
+                                            {isUser ? 'YOU' : 'AI'}
+                                        </span>
+                                        <div className="text-xs md:text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed font-sans select-text">
+                                            {formatChatMessage(msg.content)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                             {isChatting && (
-                                <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 mr-4 flex gap-2 items-center text-xl text-slate-400">
-                                    <div className="w-3 h-3 rounded-full border-2 border-violet-500/50 border-t-violet-400 animate-spin" />
+                                <div className="p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 mr-4 rounded-tl-xs flex gap-2 items-center text-xs md:text-sm text-slate-700 dark:text-slate-300">
+                                    <div className="w-3.5 h-3.5 rounded-full border-2 border-violet-500/50 border-t-violet-500 animate-spin" />
                                     AI is analyzing...
                                 </div>
                             )}
@@ -519,31 +556,31 @@ export default function ChartsTab() {
         const trendColor = a.trend?.direction === 'UPTREND' ? 'text-emerald-400' : a.trend?.direction === 'DOWNTREND' ? 'text-red-400' : 'text-slate-400';
 
         return (
-            <div className="space-y-3 animate-fade-in text-xl">
-                <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+            <div className="space-y-3 animate-fade-in text-xs md:text-sm">
+                <div className="bg-slate-100/80 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[13px] font-bold text-slate-500 tracking-widest">TREND</span>
-                        <span className={`font-black text-lg ${trendColor}`}>
+                        <span className="text-xs font-bold text-slate-500 tracking-wider">TREND</span>
+                        <span className={`font-black text-sm md:text-base ${trendColor}`}>
                             {a.trend?.direction} · {a.trend?.strength}
                         </span>
                     </div>
-                    <p className="text-slate-300 leading-relaxed">{a.trend?.description}</p>
+                    <p className="text-slate-800 dark:text-slate-100 leading-relaxed font-sans">{a.trend?.description}</p>
                 </div>
 
                 {(a.key_levels?.support?.length > 0 || a.key_levels?.resistance?.length > 0) && (
-                    <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
-                        <span className="text-[13px] font-bold text-slate-500 tracking-widest block mb-2">KEY LEVELS</span>
+                    <div className="bg-slate-100/80 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
+                        <span className="text-xs font-bold text-slate-500 tracking-wider block mb-2">KEY LEVELS</span>
                         <div className="grid grid-cols-2 gap-2">
                             <div>
-                                <div className="text-[13px] text-emerald-500 font-bold mb-1">SUPPORT</div>
+                                <div className="text-xs text-emerald-600 dark:text-emerald-500 font-bold mb-1">SUPPORT</div>
                                 {a.key_levels.support.map((l, i) => (
-                                    <div key={i} className="text-emerald-300 font-mono text-[15px] font-bold">{l}</div>
+                                    <div key={i} className="text-emerald-600 dark:text-emerald-400 font-mono text-xs md:text-sm font-bold">{l}</div>
                                 ))}
                             </div>
                             <div>
-                                <div className="text-[13px] text-red-500 font-bold mb-1">RESISTANCE</div>
+                                <div className="text-xs text-rose-600 dark:text-red-500 font-bold mb-1">RESISTANCE</div>
                                 {a.key_levels.resistance.map((l, i) => (
-                                    <div key={i} className="text-red-300 font-mono text-[15px] font-bold">{l}</div>
+                                    <div key={i} className="text-rose-600 dark:text-red-400 font-mono text-xs md:text-sm font-bold">{l}</div>
                                 ))}
                             </div>
                         </div>
@@ -551,11 +588,11 @@ export default function ChartsTab() {
                 )}
 
                 {a.patterns && a.patterns.length > 0 && (
-                    <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
-                        <span className="text-[13px] font-bold text-slate-500 tracking-widest block mb-2">PATTERNS DETECTED</span>
+                    <div className="bg-slate-100/80 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
+                        <span className="text-xs font-bold text-slate-500 tracking-wider block mb-2">PATTERNS DETECTED</span>
                         <div className="flex flex-wrap gap-1.5">
                             {a.patterns.map((p, i) => (
-                                <span key={i} className="px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/40 rounded text-lg text-indigo-300 font-bold">
+                                <span key={i} className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/30 rounded text-xs text-indigo-600 dark:text-indigo-300 font-bold">
                                     {p}
                                 </span>
                             ))}
@@ -564,41 +601,41 @@ export default function ChartsTab() {
                 )}
 
                 {(a.entry_zone || a.stop_loss || a.target_1) && (
-                    <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800 space-y-2">
-                        <span className="text-[13px] font-bold text-slate-500 tracking-widest block mb-1">TRADE SETUP</span>
-                        <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-lg">
-                            {a.entry_zone && <div><span className="text-slate-500">Entry: </span><span className="text-sky-300 font-bold font-mono">{a.entry_zone}</span></div>}
-                            {a.stop_loss && <div><span className="text-slate-500">Stop: </span><span className="text-red-400 font-bold font-mono">{a.stop_loss}</span></div>}
-                            {a.target_1 && <div><span className="text-slate-500">T1: </span><span className="text-emerald-400 font-bold font-mono">{a.target_1}</span></div>}
-                            {a.target_2 && <div><span className="text-slate-500">T2: </span><span className="text-emerald-300 font-bold font-mono">{a.target_2}</span></div>}
+                    <div className="bg-slate-100/80 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200 dark:border-slate-800 space-y-2">
+                        <span className="text-xs font-bold text-slate-500 tracking-wider block mb-1">TRADE SETUP</span>
+                        <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-xs md:text-sm">
+                            {a.entry_zone && <div><span className="text-slate-500">Entry: </span><span className="text-sky-600 dark:text-sky-300 font-bold font-mono">{a.entry_zone}</span></div>}
+                            {a.stop_loss && <div><span className="text-slate-500">Stop: </span><span className="text-rose-600 dark:text-rose-400 font-bold font-mono">{a.stop_loss}</span></div>}
+                            {a.target_1 && <div><span className="text-slate-500">T1: </span><span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">{a.target_1}</span></div>}
+                            {a.target_2 && <div><span className="text-slate-500">T2: </span><span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">{a.target_2}</span></div>}
                         </div>
                         {a.risk_reward && (
-                            <div className="text-lg text-amber-400 font-bold border-t border-slate-800 pt-2">R:R = {a.risk_reward}</div>
+                            <div className="text-xs md:text-sm text-amber-600 dark:text-amber-400 font-bold border-t border-slate-200 dark:border-slate-800 pt-2">R:R = {a.risk_reward}</div>
                         )}
                     </div>
                 )}
 
                 {(a.volume_analysis || a.vwap_position) && (
-                    <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
-                        <span className="text-[13px] font-bold text-slate-500 tracking-widest block mb-1.5">VOLUME · VWAP</span>
+                    <div className="bg-slate-100/80 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
+                        <span className="text-xs font-bold text-slate-500 tracking-wider block mb-1.5">VOLUME · VWAP</span>
                         {a.vwap_position && a.vwap_position !== 'NOT_VISIBLE' && (
-                            <span className={`text-lg font-bold px-2 py-0.5 rounded mr-2 ${a.vwap_position === 'ABOVE' ? 'bg-emerald-500/20 text-emerald-400' : a.vwap_position === 'BELOW' ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-300'
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded mr-2 ${a.vwap_position === 'ABOVE' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : a.vwap_position === 'BELOW' ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                 }`}>
                                 {a.vwap_position} VWAP
                             </span>
                         )}
-                        {a.volume_analysis && <p className="text-slate-400 mt-1">{a.volume_analysis}</p>}
+                        {a.volume_analysis && <p className="text-slate-700 dark:text-slate-300 mt-1">{a.volume_analysis}</p>}
                     </div>
                 )}
 
                 {a.commentary && (
-                    <div className="bg-indigo-950/30 rounded-lg p-3 border border-indigo-800/40">
+                    <div className="bg-indigo-500/10 rounded-xl p-3 border border-indigo-500/30">
                         <div className="flex items-center gap-1.5 mb-1.5">
-                            <span className="text-[13px] font-bold text-indigo-400 tracking-widest">MISTRAL COMMENTARY</span>
+                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tracking-wider uppercase">MISTRAL COMMENTARY</span>
                             <ConfidenceDot level={a.confidence} />
-                            <span className="text-[13px] text-slate-500">{a.confidence}</span>
+                            <span className="text-xs text-slate-500">{a.confidence}</span>
                         </div>
-                        <p className="text-slate-300 leading-relaxed">{a.commentary}</p>
+                        <p className="text-slate-800 dark:text-slate-100 leading-relaxed font-sans">{a.commentary}</p>
                     </div>
                 )}
 
@@ -610,27 +647,40 @@ export default function ChartsTab() {
                 
                 {/* Chat History */}
                 {(chatHistory.length > 0 || isChatting) && (
-                    <div className="mt-6 space-y-3 border-t border-slate-800/50 pt-5">
+                    <div className="mt-6 space-y-3 border-t border-slate-200 dark:border-slate-800/50 pt-5">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-[13px] font-bold text-violet-400 tracking-widest block">CHAT WITH AI VISION</span>
+                            <span className="text-xs font-black text-violet-600 dark:text-violet-400 tracking-wider block uppercase">CHAT WITH AI ANALYST</span>
                             <button
                                 type="button"
                                 onClick={() => { setChatHistory([]); localStorage.removeItem('artillegence_chat_history'); }}
-                                className="text-lg text-slate-500 hover:text-red-400 flex items-center gap-1 transition-colors"
+                                className="text-xs text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors cursor-pointer"
                                 title="Clear chat history"
                             >
-                                <Eraser size={10} /> Clear Chat
+                                <Eraser size={12} /> Clear Chat
                             </button>
                         </div>
-                        {chatHistory.map((msg, idx) => (
-                            <div key={idx} className={`p-3 rounded-lg flex flex-col gap-1.5 ${msg.role === 'user' ? 'bg-violet-900/30 border border-violet-800/40 ml-4' : 'bg-slate-800/50 border border-slate-700/50 mr-4'}`}>
-                                <span className="text-[13px] font-bold text-slate-500 uppercase">{msg.role === 'user' ? 'YOU' : 'AI'}</span>
-                                <span className="text-slate-300 text-xl whitespace-pre-wrap leading-relaxed">{msg.content}</span>
-                            </div>
-                        ))}
+                        {chatHistory.map((msg, idx) => {
+                            const isUser = msg.role === 'user';
+                            return (
+                                <div key={idx} className={`p-3.5 rounded-2xl flex flex-col gap-1.5 shadow-sm backdrop-blur-md transition-all ${
+                                    isUser 
+                                        ? 'bg-violet-500/10 dark:bg-violet-900/30 border border-violet-500/30 ml-4 rounded-tr-xs' 
+                                        : 'bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 mr-4 rounded-tl-xs'
+                                }`}>
+                                    <span className={`text-[11px] font-black uppercase tracking-wider ${
+                                        isUser ? 'text-violet-600 dark:text-violet-400' : 'text-indigo-600 dark:text-sky-400'
+                                    }`}>
+                                        {isUser ? 'YOU' : 'AI'}
+                                    </span>
+                                    <div className="text-xs md:text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed font-sans select-text">
+                                        {formatChatMessage(msg.content)}
+                                    </div>
+                                </div>
+                            );
+                        })}
                         {isChatting && (
-                            <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 mr-4 flex gap-2 items-center text-xl text-slate-400">
-                                <div className="w-3 h-3 rounded-full border-2 border-violet-500/50 border-t-violet-400 animate-spin" />
+                            <div className="p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 mr-4 rounded-tl-xs flex gap-2 items-center text-xs md:text-sm text-slate-700 dark:text-slate-300">
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-violet-500/50 border-t-violet-500 animate-spin" />
                                 AI is analyzing...
                             </div>
                         )}
@@ -671,11 +721,11 @@ export default function ChartsTab() {
 
         const m = mistralThesis;
         return (
-            <div className="space-y-3 animate-fade-in text-xl">
-                <div className="text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">
+            <div className="space-y-3 animate-fade-in text-xs md:text-sm">
+                <div className="text-slate-800 dark:text-slate-100 leading-relaxed font-sans whitespace-pre-wrap">
                     {m.thesis.split('**').map((chunk, i) =>
                         i % 2 === 1
-                            ? <span key={i} className="font-bold text-orange-300 block mt-3 mb-0.5 not-italic">{chunk}</span>
+                            ? <span key={i} className="font-extrabold text-orange-600 dark:text-orange-400 block mt-2.5 mb-1 not-italic tracking-wide">{chunk}</span>
                             : <span key={i}>{chunk}</span>
                     )}
                 </div>
@@ -963,7 +1013,7 @@ export default function ChartsTab() {
                         <h2 className="text-xl font-black tracking-wider text-white flex items-center gap-2">
                             AUTONOMOUS TRADING AGENT
                             <span className="text-[13px] font-normal text-slate-500 border border-slate-700 rounded px-1.5 py-0.5 ml-1">
-                                AI Vision + AI News
+                                AI Technicals + AI News
                             </span>
                         </h2>
                         <p className="text-xl text-slate-400">Live TradingView chart · AI analysis · News scraping</p>
@@ -1232,44 +1282,45 @@ export default function ChartsTab() {
                     </div>
                 </div>
 
-                {/* Right: AI Thesis Panel */}
-                <div className="lg:col-span-1 glass-panel flex flex-col rounded-xl border border-slate-700/50 overflow-hidden" style={{ maxHeight: '660px' }}>
+                {/* Right: AI Thesis / Chat Panel (Futuristic Glassmorphism) */}
+                <div className="lg:col-span-1 glass-panel flex flex-col rounded-2xl border border-indigo-500/25 bg-white/95 dark:bg-slate-950/85 backdrop-blur-2xl shadow-xl shadow-indigo-500/5 overflow-hidden" style={{ maxHeight: '680px' }}>
 
-                    <div className="flex border-b border-slate-800 flex-shrink-0">
+                    {/* Futuristic Glassmorphic Navigation Tabs */}
+                    <div className="flex border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60 p-1.5 gap-1.5 flex-shrink-0">
                         <button
                             onClick={() => setActivePanel('claude')}
-                            className={`flex-1 py-2.5 text-lg font-bold tracking-widest transition-all flex items-center justify-center gap-1.5 ${activePanel === 'claude'
-                                    ? 'text-violet-400 border-b-2 border-violet-500 bg-violet-950/20'
-                                    : 'text-slate-500 hover:text-slate-300'
+                            className={`flex-1 py-2 text-xs md:text-sm font-extrabold tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${activePanel === 'claude'
+                                    ? 'text-violet-600 dark:text-violet-300 bg-white dark:bg-violet-950/50 border border-violet-500/30 shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                                 }`}
                         >
-                            <Camera size={12} /> AI VISION
+                            <Camera size={14} /> AI TECHNICALS
                         </button>
                         <button
                             onClick={() => setActivePanel('mistral')}
-                            className={`flex-1 py-2.5 text-lg font-bold tracking-widest transition-all flex items-center justify-center gap-1.5 ${activePanel === 'mistral'
-                                    ? 'text-orange-400 border-b-2 border-orange-500 bg-orange-950/20'
-                                    : 'text-slate-500 hover:text-slate-300'
+                            className={`flex-1 py-2 text-xs md:text-sm font-extrabold tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${activePanel === 'mistral'
+                                    ? 'text-orange-600 dark:text-orange-300 bg-white dark:bg-orange-950/50 border border-orange-500/30 shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                                 }`}
                         >
-                            <Newspaper size={12} /> AI NEWS
+                            <Newspaper size={14} /> AI NEWS
                         </button>
                     </div>
 
-                    <div className="flex items-center justify-between px-4 py-2 bg-slate-900/40 border-b border-slate-800/60 flex-shrink-0">
+                    <div className="flex items-center justify-between px-4 py-2 bg-slate-100/50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800/60 flex-shrink-0">
                         <div className="flex items-center gap-2">
                             {activePanel === 'claude' && claudeAnalysis && <BiasChip bias={claudeAnalysis.bias} />}
                             {activePanel === 'mistral' && mistralThesis && <BiasChip bias={mistralThesis.bias} />}
                             {!claudeAnalysis && !mistralThesis && (
-                                <span className="text-lg text-slate-600 italic">No analysis yet</span>
+                                <span className="text-xs text-slate-500 italic">Ready for analysis</span>
                             )}
                         </div>
                         <div className="flex items-center gap-1.5">
                             {activePanel === 'claude' && (
-                                <span className="text-[13px] text-violet-400 font-bold tracking-wider">AI VISION</span>
+                                <span className="text-[11px] text-violet-600 dark:text-violet-400 font-black tracking-wider uppercase">AI TECHNICALS</span>
                             )}
                             {activePanel === 'mistral' && (
-                                <span className="text-[13px] text-orange-400 font-bold tracking-wider">AI NEWS</span>
+                                <span className="text-[11px] text-orange-600 dark:text-orange-400 font-black tracking-wider uppercase">AI NEWS</span>
                             )}
                         </div>
                     </div>
@@ -1279,7 +1330,7 @@ export default function ChartsTab() {
                     </div>
 
                     {activePanel === 'claude' && (
-                        <form onSubmit={(e) => handleSendChatMessage(e)} className="p-3 bg-slate-900/80 border-t border-slate-800 flex items-center gap-2 shrink-0">
+                        <form onSubmit={(e) => handleSendChatMessage(e)} className="p-3 bg-slate-50/90 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 shrink-0 backdrop-blur-md">
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -1291,10 +1342,10 @@ export default function ChartsTab() {
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={isChatting || isProcessingFile}
-                                className="p-2 text-slate-400 hover:text-violet-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
+                                className="p-2 text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
                                 title="Attach Image or PDF"
                             >
-                                <Paperclip size={18} className={isProcessingFile ? 'animate-pulse text-violet-400' : ''} />
+                                <Paperclip size={18} className={isProcessingFile ? 'animate-pulse text-violet-500' : ''} />
                             </button>
                             <input 
                                 type="text"
@@ -1322,21 +1373,21 @@ export default function ChartsTab() {
                                 }}
                                 placeholder="Ask about this chart or attach a file..."
                                 disabled={isChatting}
-                                className="flex-1 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-xl text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                                className="flex-1 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs md:text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all"
                             />
                             <button 
                                 type="submit" 
                                 disabled={isChatting || isProcessingFile || (!chatInput.trim() && chatHistory.length === 0)}
-                                className="px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg text-xl font-bold transition-colors"
+                                className="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl text-xs md:text-sm font-extrabold transition-all shadow-md shadow-violet-500/20 flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
                             >
-                                SEND
+                                <Send size={14} /> Send
                             </button>
                         </form>
                     )}
 
-                    <div className="p-3 bg-red-950/20 border-t border-red-900/30 flex items-start gap-2 flex-shrink-0">
-                        <AlertTriangle size={11} className="text-red-500/60 mt-0.5 shrink-0" />
-                        <p className="text-[13px] text-slate-500 leading-tight">
+                    <div className="p-3 bg-red-500/5 dark:bg-red-950/20 border-t border-red-500/10 flex items-start gap-2 flex-shrink-0">
+                        <AlertTriangle size={12} className="text-red-500/70 mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight">
                             AI analysis is for informational purposes only and does not constitute certified financial advice.
                         </p>
                     </div>

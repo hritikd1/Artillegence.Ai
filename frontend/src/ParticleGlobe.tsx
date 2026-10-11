@@ -15,6 +15,11 @@ const FALLBACK_NEWS = [
   { id: 'f8', city: 'Beijing', headline: 'PBoC Cuts Reserve Ratio', lat: 39.90, lng: 116.40, severity: 'high', source: 'Xinhua', timestamp: new Date().toISOString() },
   { id: 'f9', city: 'Singapore', headline: 'ASEAN Tech Summit Opens', lat: 1.35, lng: 103.82, severity: 'low', source: 'ST', timestamp: new Date().toISOString() },
   { id: 'f10', city: 'Sydney', headline: 'ASX Mining Sector Surge', lat: -33.87, lng: 151.21, severity: 'medium', source: 'ABC', timestamp: new Date().toISOString() },
+  { id: 'f11', city: 'Frankfurt', headline: 'ECB Digital Euro Roadmap', lat: 50.11, lng: 8.68, severity: 'critical', source: 'Bundesbank', timestamp: new Date().toISOString() },
+  { id: 'f12', city: 'Seoul', headline: 'AI Chip Export Growth Hits 40%', lat: 37.56, lng: 126.97, severity: 'high', source: 'Yonhap', timestamp: new Date().toISOString() },
+  { id: 'f13', city: 'Toronto', headline: 'Clean Energy Grid Investment', lat: 43.65, lng: -79.38, severity: 'low', source: 'CBC', timestamp: new Date().toISOString() },
+  { id: 'f14', city: 'Paris', headline: 'Aerospace Defense Orders Surge', lat: 48.85, lng: 2.35, severity: 'medium', source: 'AFP', timestamp: new Date().toISOString() },
+  { id: 'f15', city: 'Washington', headline: 'Strategic Treasury Yield Shifts', lat: 38.90, lng: -77.03, severity: 'high', source: 'Fed', timestamp: new Date().toISOString() },
 ];
 
 // Color palette for pins - vivid colors matching the reference image
@@ -92,14 +97,14 @@ interface GeoEvent {
 
 interface ParticleGlobeProps {
   events?: GeoEvent[];
+  theme?: 'broken-glass' | 'neon-black';
 }
 
-export default function ParticleGlobe({ events }: ParticleGlobeProps) {
+export default function ParticleGlobe({ events, theme = 'broken-glass' }: ParticleGlobeProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [liveNews, setLiveNews] = useState<any[]>([]);
   const [dimensions, setDimensions] = useState({ width: 800, height: 800 });
-  const animFrameRef = useRef<number>(0);
 
   // Sync props to state for live updates
   useEffect(() => {
@@ -147,15 +152,15 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
           // AUTOMATIC RSS SCRAPE: Pull live Google News RSS (Global + India)!
           const rssUrlGlobal = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
           const rssUrlIndia = 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en';
-          
+
           const [rssResGlobal, rssResIndia] = await Promise.all([
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrlGlobal)}`),
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrlIndia)}`)
           ]);
-          
+
           const dataGlobal = await rssResGlobal.json();
           const dataIndia = await rssResIndia.json();
-          
+
           let combinedItems = [];
           if (dataGlobal?.items) combinedItems.push(...dataGlobal.items);
           if (dataIndia?.items) combinedItems.push(...dataIndia.items);
@@ -163,25 +168,25 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
           if (combinedItems.length > 0) {
             // Shuffle lightly to mix India + Global natively
             combinedItems = combinedItems.sort(() => 0.5 - Math.random());
-            
+
             const now = Date.now();
             const mappedNews = combinedItems.slice(0, 60).map((item: any, index: number) => {
               // Google News format: "Actual Headline - Publisher Name"
               let headline = item.title;
               let source = 'Global News';
-              
+
               if (headline.includes(' - ')) {
                 const parts = headline.split(' - ');
                 source = parts.pop()?.trim() || source;
                 headline = parts.join(' - ').trim();
               }
-              
+
               const cityAnchor = CITIES_LIST[index % CITIES_LIST.length];
-              
+
               // Force timestamp strictly into "today" format within the last 12 hrs
               const offsetMs = (Math.random() * 12 * 60 * 60 * 1000);
               const forcedTodayTimestamp = new Date(now - offsetMs).toISOString();
-              
+
               return {
                 id: `rss-${index}`,
                 city: cityAnchor.city,
@@ -193,7 +198,7 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
                 timestamp: forcedTodayTimestamp
               };
             });
-            
+
             setLiveNews(mappedNews);
           } else {
             setLiveNews(FALLBACK_NEWS.map(n => ({ ...n, timestamp: new Date(Date.now() - Math.random() * 40000000).toISOString() })));
@@ -204,33 +209,34 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
       }
     };
     fetchNews();
-    const interval = setInterval(fetchNews, 12000);
+    // Refresh only every 120s rather than 12s to avoid constant re-renders
+    const interval = setInterval(fetchNews, 120000);
     return () => clearInterval(interval);
   }, []);
 
-  // Generate radiating pin stalks (the lines shooting outward in the reference image)
+  // Generate radiating pin stalks (streamlined count for high FPS)
   const pinStalks = useMemo(() => {
     const stalks: any[] = [];
-    // Generate ~120 stalks spread around the globe, just like the reference
-    for (let i = 0; i < 120; i++) {
+    const count = theme === 'broken-glass' ? 30 : 45;
+    for (let i = 0; i < count; i++) {
       const lat = (Math.random() - 0.5) * 160;
       const lng = (Math.random() - 0.5) * 360;
-      const height = 0.15 + Math.random() * 0.6; // varying heights
-      const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
-      stalks.push({ lat, lng, height, color, size: 0.3 + Math.random() * 0.5 });
+      const height = 0.15 + Math.random() * 0.5;
+      const color = PIN_COLORS[i % PIN_COLORS.length];
+      stalks.push({ lat, lng, height, color, size: 0.3 + Math.random() * 0.4 });
     }
     return stalks;
-  }, []);
+  }, [theme]);
 
-  // Scattered background bokeh particles (the out-of-focus dots in the reference)
+  // Scattered background bokeh particles (streamlined for 60fps)
   const bokehParticles = useMemo(() => {
     const particles: any[] = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 40; i++) {
       const lat = (Math.random() - 0.5) * 180;
       const lng = (Math.random() - 0.5) * 360;
-      const alt = 0.8 + Math.random() * 1.5;
-      const color = PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)];
-      particles.push({ lat, lng, alt, color, size: 0.3 + Math.random() * 1.2 });
+      const alt = 0.8 + Math.random() * 1.2;
+      const color = PIN_COLORS[i % PIN_COLORS.length];
+      particles.push({ lat, lng, alt, color, size: 0.3 + Math.random() * 0.8 });
     }
     return particles;
   }, []);
@@ -245,12 +251,15 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
+    controls.dampingFactor = 0.08;
 
     globeRef.current.pointOfView({ lat: 15, lng: 30, altitude: 2.2 }, 0);
 
     const scene = globeRef.current.scene();
     const renderer = globeRef.current.renderer();
+
+    // Cap pixel ratio to 1.25 to prevent 4x-9x pixel shading overhead on high-DPI retina displays
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 
     // Enable tone mapping for cinematic feel
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -273,12 +282,12 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
     const ambientLight = new THREE.AmbientLight(0x0a1628, 2.0);
     scene.add(ambientLight);
 
-    // Bottom lens flare glow (the horizontal streak in the reference)
-    const flareGeometry = new THREE.PlaneGeometry(600, 4);
+    // Bottom lens flare glow
+    const flareGeometry = new THREE.PlaneGeometry(500, 3);
     const flareMaterial = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.12,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
     });
@@ -286,114 +295,65 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
     flare.position.set(0, -100, 0);
     flare.rotation.x = -Math.PI / 2;
     scene.add(flare);
-
-    // Second subtle flare
-    const flare2Geo = new THREE.PlaneGeometry(400, 2);
-    const flare2Mat = new THREE.MeshBasicMaterial({
-      color: 0x22d3ee,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-    const flare2 = new THREE.Mesh(flare2Geo, flare2Mat);
-    flare2.position.set(0, -101, 10);
-    flare2.rotation.x = -Math.PI / 2;
-    scene.add(flare2);
-
-    // Animate the bokeh particles with a slow drift
-    const animate = () => {
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-    animate();
-
-  }, []);
+  }, [theme]);
 
   useEffect(() => {
-    // Small delay to ensure globe is mounted
     const timer = setTimeout(setupScene, 200);
     return () => {
       clearTimeout(timer);
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [setupScene]);
 
-  // Data for the HTML news boxes and background floaters
+  // Data for the HTML news boxes (15 pins for rich global intelligence coverage)
   const newsBoxData = useMemo(() => {
-    // Top 15 items for main
     const mainCount = Math.min(15, liveNews.length);
-    const mainNews = liveNews.slice(0, mainCount).map(item => ({ ...item, isMain: true }));
-    
-    // Pick 40 bokeh particles to attach transparent background headlines
-    const bgNews = [];
-    if (liveNews.length > 0) {
-      for (let i = 0; i < 40; i++) {
-        const p = bokehParticles[i];
-        
-        let targetIndex = i % liveNews.length;
-        if (liveNews.length > mainCount) {
-          targetIndex = mainCount + (i % (liveNews.length - mainCount));
-        }
-
-        const newsItem = liveNews[targetIndex];
-        if (p && newsItem) {
-          // p.alt is bounded roughly between 0.8 and 2.3
-          const distanceRatio = Math.max(0, Math.min(1, Math.abs(p.alt - 0.8) / 1.5));
-          // Reduce opacity linearly relative to distance from globe surface
-          const calcOpacity = Math.max(0.1, 1 - distanceRatio);
-          
-          bgNews.push({
-            ...newsItem,
-            id: `bg-${i}`,
-            lat: p.lat,
-            lng: p.lng,
-            alt: p.alt, // Use exact particle altitude
-            isMain: false,
-            opacity: calcOpacity
-          });
-        }
-      }
-    }
-    return [...mainNews, ...bgNews];
-  }, [liveNews, bokehParticles]);
+    return liveNews.slice(0, mainCount).map(item => ({ ...item, isMain: true }));
+  }, [liveNews]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 z-0 flex items-center justify-center">
-      {/* Ambient background glow layers */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 0,
-        background: 'radial-gradient(ellipse 60% 50% at 55% 45%, rgba(56,189,248,0.06) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 0,
-        background: 'radial-gradient(ellipse 40% 30% at 50% 55%, rgba(139,92,246,0.04) 0%, transparent 60%)',
-        pointerEvents: 'none',
-      }} />
-      {/* Bottom lens flare CSS effect */}
-      <div style={{
-        position: 'absolute', bottom: '30%', left: '10%', right: '10%', height: '2px', zIndex: 1,
-        background: 'linear-gradient(90deg, transparent, rgba(56,189,248,0.3), rgba(34,211,238,0.15), transparent)',
-        filter: 'blur(4px)',
-        pointerEvents: 'none',
-      }} />
+      {/* Ambient background glow layers (hide in white theme) */}
+      {theme !== 'broken-glass' && (
+        <>
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 0,
+            background: 'radial-gradient(ellipse 60% 50% at 55% 45%, rgba(56,189,248,0.06) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 0,
+            background: 'radial-gradient(ellipse 40% 30% at 50% 55%, rgba(139,92,246,0.04) 0%, transparent 60%)',
+            pointerEvents: 'none',
+          }} />
+          {/* Bottom lens flare CSS effect */}
+          <div style={{
+            position: 'absolute', bottom: '30%', left: '10%', right: '10%', height: '2px', zIndex: 1,
+            background: 'linear-gradient(90deg, transparent, rgba(56,189,248,0.3), rgba(34,211,238,0.15), transparent)',
+            filter: 'blur(4px)',
+            pointerEvents: 'none',
+          }} />
+        </>
+      )}
 
       <Globe
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
         backgroundColor="rgba(0,0,0,0)"
+        showGlobe={theme !== 'broken-glass'}
 
-        // Dark globe texture - use dark/night earth for that deep blue look
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+        // Swap globe texture based on theme
+        globeImageUrl={theme === 'broken-glass'
+          ? "//unpkg.com/three-globe/example/img/earth-water.png"
+          : "//unpkg.com/three-globe/example/img/earth-night.jpg"}
         bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
 
-        // Glowing blue atmosphere
-        atmosphereColor="#38bdf8"
+        // Glowing atmosphere
+        atmosphereColor={theme === 'broken-glass' ? '#ffffff' : '#38bdf8'}
         atmosphereAltitude={0.25}
 
         // Pin stalks as custom 3D objects (the radiating lines with dots at the tips)
-        customLayerData={[...pinStalks, ...bokehParticles]}
+        customLayerData={[...pinStalks, ...(theme === 'broken-glass' ? [] : bokehParticles)]}
         customThreeObject={(d: any) => {
           const group = new THREE.Group();
 
@@ -472,18 +432,21 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
         htmlElementsData={newsBoxData}
         htmlElement={(d: any, idx?: number) => {
           const el = document.createElement('div');
-          
+
           if (!d.isMain) {
             // Render fading background floating news hooked directly onto bokeh particles
             const pinColor = getPinColor(idx || 0);
+            const isLight = theme === 'broken-glass';
+
             el.innerHTML = `
               <div style="
                 opacity: ${d.opacity.toFixed(2)};
-                background: rgba(8, 12, 22, 0.45);
-                border: 1px solid ${pinColor}30;
+                background: ${isLight ? 'rgba(255, 255, 255, 0.4)' : 'rgba(11, 25, 44, 0.4)'};
+                border: 1px solid ${isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(56, 189, 248, 0.2)'};
                 padding: 4px 6px;
                 border-radius: 4px;
-                color: rgba(255,255,255,0.75);
+                color: ${isLight ? '#1a202c' : '#ffffff'};
+                font-weight: 600;
                 font-size: 7px;
                 font-family: 'Inter', system-ui, sans-serif;
                 letter-spacing: 0.03em;
@@ -491,7 +454,7 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
                 max-width: 140px;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                box-shadow: 0 0 10px ${pinColor}20, inset 0 0 5px rgba(255,255,255,0.05);
+                box-shadow: 0 0 10px ${pinColor}20, inset 0 0 5px rgba(${isLight ? '255,255,255,0.05' : '56,189,248,0.05'});
                 transform: translate(-50%, -50%);
                 pointer-events: none;
                 backdrop-filter: blur(4px);
@@ -507,6 +470,7 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
           const headline = d.headline || d.news || 'Signal intercepted';
           const source = d.source || 'Artillegence';
           const time = timeAgo(d.timestamp || new Date().toISOString());
+          const isLight = theme === 'broken-glass';
 
           el.style.pointerEvents = 'auto';
           el.innerHTML = `
@@ -515,28 +479,26 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
               flex-direction: column;
               align-items: center;
               transform: translateY(-45px);
-              transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+              transition: transform 0.3s ease;
+              will-change: transform;
+              contain: layout style;
               cursor: pointer;
-              filter: drop-shadow(0 0 8px ${pinColor}40);
-            " onmouseover="this.style.transform='translateY(-55px) scale(1.12)'; this.style.filter='drop-shadow(0 0 20px ${pinColor}80)'" onmouseout="this.style.transform='translateY(-45px) scale(1)'; this.style.filter='drop-shadow(0 0 8px ${pinColor}40)'">
+            " onmouseover="this.style.transform='translateY(-55px) scale(1.08)';" onmouseout="this.style.transform='translateY(-45px) scale(1)';">
 
-              
               <!-- News Card -->
               <div style="
-                background: linear-gradient(135deg, rgba(3,6,10,0.92), rgba(8,15,28,0.88));
-                border: 1px solid ${pinColor}50;
-                border-left: 2px solid ${pinColor};
-                box-shadow: 0 0 20px ${pinColor}25, 0 4px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
-                padding: 8px 12px;
+                background: ${isLight ? '#ffffff' : '#040b16'};
+                border: 1px solid ${isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(56, 189, 248, 0.3)'};
+                border-left: 3px solid ${pinColor};
+                box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+                padding: 7px 10px;
                 border-radius: 8px;
-                color: white;
+                color: ${isLight ? '#1a202c' : '#ffffff'};
                 display: flex;
                 flex-direction: column;
                 gap: 3px;
-                max-width: 200px;
-                min-width: 140px;
-                backdrop-filter: blur(16px);
-                -webkit-backdrop-filter: blur(16px);
+                max-width: 190px;
+                min-width: 130px;
               ">
                 <!-- Header: City + Time -->
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
@@ -548,14 +510,14 @@ export default function ParticleGlobe({ events }: ParticleGlobeProps) {
                     <span style="width: 5px; height: 5px; background: ${pinColor}; border-radius: 50%; display: inline-block; animation: blink 2s infinite;"></span>
                     ${cityName}
                   </span>
-                  <span style="font-size: 6px; color: rgba(255,255,255,0.35); font-weight: 600; letter-spacing: 0.08em; white-space: nowrap;">${time}</span>
+                  <span style="font-size: 6px; color: ${isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.5)'}; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap;">${time}</span>
                 </div>
                 
                 <!-- Headline -->
                 <span style="
-                  font-size: 9px; font-weight: 600; font-family: 'Inter', system-ui, sans-serif;
+                  font-size: 9px; font-weight: 700; font-family: 'Inter', system-ui, sans-serif;
                   letter-spacing: 0.02em; line-height: 1.3;
-                  color: rgba(255,255,255,0.9);
+                  color: ${isLight ? '#2d3748' : '#e2e8f0'};
                   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
                 ">${headline}</span>
                 

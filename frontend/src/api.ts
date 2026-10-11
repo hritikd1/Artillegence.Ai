@@ -25,12 +25,14 @@ export async function apiFetch<T = unknown>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const timeoutMs = (options as any)?.timeoutMs || 60000;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const { timeoutMs: _t, ...fetchOptions } = options as any;
     const response = await fetch(`${BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       signal: controller.signal,
     });

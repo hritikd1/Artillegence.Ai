@@ -13,6 +13,9 @@ import { apiGet, apiPost } from './api'
 const EarthMap = lazy(() => import('./EarthMap'));
 const ChartsTab = lazy(() => import('./ChartsTab'));
 const InfiniteSpaceView = lazy(() => import('./InfiniteSpaceView'));
+const ScreenerTab = lazy(() => import('./ScreenerTab'));
+const ThemeAnalysisTab = lazy(() => import('./ThemeAnalysisTab'));
+import ParticleGlobe from './ParticleGlobe';
 
 interface GeoEvent {
   id: string;
@@ -126,11 +129,11 @@ class ErrorBoundary extends Component<EBProps, EBState> {
       return (
         <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px] text-center">
           <AlertTriangle className="text-amber-500 mb-6" size={64} />
-          <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-widest">Analytics Layer Standby</h2>
-          <p className="text-slate-400 max-w-md mx-auto text-sm leading-relaxed mb-6">
+          <h2 className="text-2xl font-black text-[var(--color-text-main)] mb-2 uppercase tracking-widest">Analytics Layer Standby</h2>
+          <p className="text-[var(--color-text-main)] max-w-md mx-auto text-sm leading-relaxed mb-6">
             An unforeseen visualization conflict occurred. The core News Scanner and Intelligence Map remain fully functional.
           </p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-6 py-2 bg-neonBlue text-black font-bold rounded-lg hover:bg-neonBlue/80 transition"
           >
@@ -145,67 +148,67 @@ class ErrorBoundary extends Component<EBProps, EBState> {
 
 /* ─── Modal Components ─── */
 
-const TacticalAdvisorModal = ({ 
-  show, 
-  loading, 
-  title, 
-  content, 
-  onClose 
-}: { 
-  show: boolean, 
-  loading: boolean, 
-  title: string, 
-  content: string, 
-  onClose: () => void 
+const TacticalAdvisorModal = ({
+  show,
+  loading,
+  title,
+  content,
+  onClose
+}: {
+  show: boolean,
+  loading: boolean,
+  title: string,
+  content: string,
+  onClose: () => void
 }) => {
   if (!show) return null;
-  
+
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="glass-panel w-full max-w-2xl max-h-[80vh] overflow-y-auto relative animate-in fade-in zoom-in duration-300">
-        <button 
+        <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-500 hover:text-white transition"
+          className="absolute top-4 right-4 text-[var(--color-text-main)] hover:text-[var(--color-text-main)] transition"
         >
           <X size={20} />
         </button>
-        
-        <div className="p-6 border-b border-slate-800">
+
+        <div className="p-6 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-1">
             <div className="px-2 py-0.5 bg-neonBlue/10 border border-neonBlue/30 rounded">
               <span className="text-[10px] font-bold text-neonBlue tracking-widest uppercase italic">Tactical Advisor</span>
             </div>
           </div>
-          <h2 className="text-xl font-bold text-white leading-tight">{title}</h2>
+          <h2 className="text-xl font-bold text-[var(--color-text-main)] leading-tight">{title}</h2>
         </div>
-        
+
         <div className="p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="h-10 w-10 border-4 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin"></div>
-              <p className="text-sm text-slate-400 italic">Synthesizing tactical action plan...</p>
+              <p className="text-sm text-[var(--color-text-main)] italic">Synthesizing tactical action plan...</p>
             </div>
           ) : (
             <div className="space-y-6">
               <div className="prose prose-invert prose-sm max-w-none">
-                <div className="text-slate-300 leading-relaxed whitespace-pre-line tactical-content">
+                <div className="text-[var(--color-text-main)] leading-relaxed whitespace-pre-line tactical-content">
                   {content.split('\n').map((line: string, i: number) => {
                     if (line.startsWith('**') || line.includes(':**')) {
                       return <div key={i} className="mt-4 first:mt-0 font-bold text-neonBlue text-sm tracking-wide">{line.replace(/\*\*/g, '')}</div>;
                     }
-                    return <p key={i} className="mb-2 text-slate-300">{line}</p>;
+                    return <p key={i} className="mb-2 text-[var(--color-text-main)]">{line}</p>;
                   })}
                 </div>
               </div>
-              
-              <div className="flex items-center gap-4 pt-4 border-t border-slate-800">
-                <button 
+
+              <div className="flex items-center gap-4 pt-4 border-t border-[var(--color-border)]">
+                <button
                   onClick={onClose}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-bold transition"
+                  className="flex-1 py-2.5 bg-[var(--color-card)] hover:bg-slate-700 text-[var(--color-text-main)] rounded font-bold transition"
                 >
                   DISMISS
                 </button>
-                <button 
+                <button
                   onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(title)}+latest+news`, '_blank')}
                   className="flex-1 py-2.5 bg-neonBlue hover:bg-neonBlue/80 text-black rounded font-bold transition"
                 >
@@ -231,7 +234,7 @@ interface ChainStep {
 
 const getImpactChain = (ev: GeoEvent): ChainStep[] => {
   const text = (ev.headline + ' ' + ev.summary).toLowerCase();
-  
+
   if (text.includes('oil') || text.includes('hormuz') || text.includes('crude') || text.includes('energy') || text.includes('fuel')) {
     return [
       { label: 'Strait of Hormuz Tension', type: 'Geopolitical Event', change: 'Trigger', isPositive: true, neutral: true },
@@ -241,7 +244,7 @@ const getImpactChain = (ev: GeoEvent): ChainStep[] => {
       { label: 'ONGC, Reliance Likely to Benefit', type: 'Stock Impact', change: '+2% to +4%', isPositive: true }
     ];
   }
-  
+
   if (text.includes('russia') || text.includes('ukraine') || text.includes('war') || text.includes('military') || text.includes('weapon') || text.includes('defence') || text.includes('defense')) {
     return [
       { label: 'East Ukraine Conflict Escalation', type: 'Security Incident', change: 'Trigger', isPositive: true, neutral: true },
@@ -286,34 +289,34 @@ const getAssetsAffected = (ev: GeoEvent): string[] => {
 };
 
 const getPointColor = (severity: string) => {
-    switch (severity) {
-        case 'critical': return '#ef4444';
-        case 'high': return '#f97316';
-        case 'medium': return '#eab308';
-        case 'low': return '#10b981';
-        default: return '#10b981';
-    }
+  switch (severity) {
+    case 'critical': return '#ef4444';
+    case 'high': return '#f97316';
+    case 'medium': return '#eab308';
+    case 'low': return '#10b981';
+    default: return '#10b981';
+  }
 };
 
-function EventDetailsSidebar({ 
-  activeEvent, 
-  activeAnalysis, 
+function EventDetailsSidebar({
+  activeEvent,
+  activeAnalysis,
   onAnalyze,
   activeEventChain,
   chainLoading
-}: { 
-  activeEvent: GeoEvent | null; 
-  activeAnalysis: { [key: string]: { loading: boolean, text: string | null } }; 
+}: {
+  activeEvent: GeoEvent | null;
+  activeAnalysis: { [key: string]: { loading: boolean, text: string | null } };
   onAnalyze: (ev: GeoEvent) => void;
   activeEventChain: any;
   chainLoading: boolean;
 }) {
   if (!activeEvent) {
     return (
-      <div className="glass-panel p-5 text-center text-slate-500 min-h-[300px] flex flex-col items-center justify-center border border-slate-800/80">
+      <div className="glass-panel p-5 text-center text-[var(--color-text-main)] min-h-[300px] flex flex-col items-center justify-center border border-[var(--color-border)]">
         <Radio className="animate-pulse mb-3 text-slate-600" size={32} />
-        <h3 className="text-xs font-bold text-slate-400 tracking-wider">SELECT AN EVENT</h3>
-        <p className="text-[10px] text-slate-500 mt-1 max-w-[200px]">Click any marker on the map to inspect its real-time market impact and AI analysis.</p>
+        <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-wider">SELECT AN EVENT</h3>
+        <p className="text-[10px] text-[var(--color-text-main)] mt-1 max-w-[200px]">Click any marker on the map to inspect its real-time market impact and AI analysis.</p>
       </div>
     );
   }
@@ -345,28 +348,28 @@ function EventDetailsSidebar({
   const scoreSeed = activeEvent.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const probScore = activeEventChain?.severity
     ? (activeEventChain.severity === 'CRITICAL' || activeEventChain.severity === 'HIGH' ? 85 : 55)
-    : (activeEvent.severity === 'critical' || activeEvent.severity === 'high' 
-        ? 80 + (scoreSeed % 15) 
-        : activeEvent.severity === 'medium' 
-          ? 60 + (scoreSeed % 18) 
-          : 35 + (scoreSeed % 20));
+    : (activeEvent.severity === 'critical' || activeEvent.severity === 'high'
+      ? 80 + (scoreSeed % 15)
+      : activeEvent.severity === 'medium'
+        ? 60 + (scoreSeed % 18)
+        : 35 + (scoreSeed % 20));
 
-  const confidence = activeEventChain?.overall_market_impact 
+  const confidence = activeEventChain?.overall_market_impact
     ? "High"
     : (activeEvent.severity === 'critical' || activeEvent.severity === 'high' ? 'High' : activeEvent.severity === 'medium' ? 'Medium' : 'Low');
 
   return (
-    <div className="glass-panel p-5 flex flex-col gap-4 text-left border border-slate-800/80 bg-slate-950/60 shadow-xl select-none">
+    <div className="glass-panel p-5 flex flex-col gap-4 text-left border border-[var(--color-border)] bg-[var(--color-card)] shadow-xl select-none">
       <div>
-        <h3 className="text-xs font-bold text-slate-400 tracking-wider mb-2 uppercase flex items-center gap-1.5">
+        <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-wider mb-2 uppercase flex items-center gap-1.5">
           <Globe size={12} className="text-sky-400 animate-pulse" /> Geopolitical Impact Exposure
         </h3>
-        <h2 className="text-sm font-extrabold text-white leading-snug">{activeEvent.headline}</h2>
+        <h2 className="text-sm font-extrabold text-[var(--color-text-main)] leading-snug">{activeEvent.headline}</h2>
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
-          <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-slate-900 text-slate-400 border-slate-800">
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-[var(--color-card)] text-[var(--color-text-main)] border-[var(--color-border)]">
             {activeEvent.category || 'Geopolitics'}
           </span>
-          <span 
+          <span
             className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider"
             style={{ color: color, backgroundColor: `${color}15`, borderColor: `${color}30` }}
           >
@@ -375,8 +378,8 @@ function EventDetailsSidebar({
         </div>
       </div>
 
-      <div className="border-t border-slate-800/60 pt-3 flex flex-col">
-        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-3">EVENT IMPACT CHAIN</h4>
+      <div className="border-t border-[var(--color-border)] pt-3 flex flex-col">
+        <h4 className="text-[9px] font-bold text-[var(--color-text-main)] tracking-widest uppercase mb-3">EVENT IMPACT CHAIN</h4>
         {chainLoading ? (
           <div className="flex flex-col items-center justify-center py-6 space-y-2">
             <div className="animate-spin w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
@@ -387,23 +390,22 @@ function EventDetailsSidebar({
             {chain.map((step: any, i: number) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
-                  <div 
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center text-[9px] font-black ${
-                      step.neutral 
-                        ? 'bg-slate-950 border-slate-800 text-slate-400' 
-                        : step.isPositive 
-                          ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400' 
+                  <div
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center text-[9px] font-black ${step.neutral
+                        ? 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-text-main)]'
+                        : step.isPositive
+                          ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
                           : 'bg-red-950/60 border-red-800 text-red-400'
-                    }`}
+                      }`}
                   >
                     {i + 1}
                   </div>
                   {i < chain.length - 1 && <div className="w-0.5 h-4 bg-slate-850 mt-0.5"></div>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-white font-semibold truncate leading-none mt-0.5">{step.label}</p>
+                  <p className="text-[10px] text-[var(--color-text-main)] font-semibold truncate leading-none mt-0.5">{step.label}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-[8px] text-slate-500 leading-none">{step.type}</span>
+                    <span className="text-[8px] text-[var(--color-text-main)] leading-none">{step.type}</span>
                     {!step.neutral && (
                       <span className={`text-[8px] font-bold leading-none ${step.isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                         {step.change}
@@ -417,32 +419,32 @@ function EventDetailsSidebar({
         )}
       </div>
 
-      <div className="border-t border-slate-800/60 pt-3">
-        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-2">ASSETS LIKELY AFFECTED</h4>
+      <div className="border-t border-[var(--color-border)] pt-3">
+        <h4 className="text-[9px] font-bold text-[var(--color-text-main)] tracking-widest uppercase mb-2">ASSETS LIKELY AFFECTED</h4>
         <div className="flex flex-wrap gap-1">
           {assets.map((asset: string, i: number) => (
-            <span key={i} className="text-[9px] font-bold bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded shadow-sm">
+            <span key={i} className="text-[9px] font-bold bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-text-main)] px-2 py-0.5 rounded shadow-sm">
               {asset}
             </span>
           ))}
         </div>
       </div>
 
-      <div className="border-t border-slate-800/60 pt-3 flex items-center gap-6">
+      <div className="border-t border-[var(--color-border)] pt-3 flex items-center gap-6">
         <div>
-          <h4 className="text-[8px] font-bold text-slate-500 tracking-widest uppercase mb-1">AI PROBABILITY</h4>
+          <h4 className="text-[8px] font-bold text-[var(--color-text-main)] tracking-widest uppercase mb-1">AI PROBABILITY</h4>
           <div className="flex items-baseline gap-1">
             <span className="text-lg font-black text-emerald-400">{probScore}%</span>
-            <span className="text-[8px] text-slate-500">Confidence</span>
+            <span className="text-[8px] text-[var(--color-text-main)]">Confidence</span>
           </div>
         </div>
         <div className="flex-1">
-          <h4 className="text-[8px] font-bold text-slate-500 tracking-widest uppercase mb-1.5">CONFIDENCE LEVEL</h4>
+          <h4 className="text-[8px] font-bold text-[var(--color-text-main)] tracking-widest uppercase mb-1.5">CONFIDENCE LEVEL</h4>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-white">{confidence}</span>
-            <div className="flex-1 h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
-              <div 
-                className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+            <span className="text-[10px] font-bold text-[var(--color-text-main)]">{confidence}</span>
+            <div className="flex-1 h-1 bg-[var(--color-card)] rounded-full overflow-hidden border border-[var(--color-border)]">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                 style={{ width: confidence === 'High' ? '85%' : confidence === 'Medium' ? '55%' : '25%' }}
               ></div>
             </div>
@@ -450,9 +452,9 @@ function EventDetailsSidebar({
         </div>
       </div>
 
-      <div className="border-t border-slate-800/60 pt-3 flex flex-col gap-2">
-        <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase">OVERVIEW & EXPOSURE</h4>
-        <div className="bg-slate-955 border border-slate-900 p-3 rounded-lg text-left max-h-[140px] overflow-y-auto scrollbar-thin">
+      <div className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
+        <h4 className="text-[9px] font-bold text-[var(--color-text-main)] tracking-widest uppercase">OVERVIEW & EXPOSURE</h4>
+        <div className="bg-slate-955 border border-[var(--color-border)] p-3 rounded-lg text-left max-h-[140px] overflow-y-auto scrollbar-thin">
           {analysis ? (
             analysis.loading ? (
               <div className="flex items-center justify-center gap-2 py-3">
@@ -460,14 +462,14 @@ function EventDetailsSidebar({
                 <span className="text-[10px] text-indigo-300 font-mono animate-pulse uppercase tracking-wider">Analyzing Strategic Exposure...</span>
               </div>
             ) : (
-              <p className="text-[10px] text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">{analysis.text}</p>
+              <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed font-mono whitespace-pre-wrap">{analysis.text}</p>
             )
           ) : (
             <div className="space-y-2">
-              <p className="text-[10px] text-slate-400 leading-relaxed font-mono">{activeEvent.summary}</p>
-              <button 
+              <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed font-mono">{activeEvent.summary}</p>
+              <button
                 onClick={() => onAnalyze(activeEvent)}
-                className="w-full py-1.5 bg-indigo-650/40 hover:bg-indigo-600 text-white rounded-lg border border-indigo-500/30 text-[10px] font-bold tracking-wider transition-colors cursor-pointer"
+                className="w-full py-1.5 bg-indigo-650/40 hover:bg-indigo-600 text-[var(--color-text-main)] rounded-lg border border-indigo-500/30 text-[10px] font-bold tracking-wider transition-colors cursor-pointer"
               >
                 🌟 GENERATE DEEP STRATEGIC ANALYSIS
               </button>
@@ -480,121 +482,121 @@ function EventDetailsSidebar({
 }
 
 export function LiveTreemap() {
-    const [PlotComponent, setPlotComponent] = useState<any>(null);
-    const [data, setData] = useState<any[]>([]);
+  const [PlotComponent, setPlotComponent] = useState<any>(null);
+  const [data, setData] = useState<any[]>([]);
 
-    useEffect(() => {
-        let isMounted = true;
-        const loadPlotly = async () => {
-            try {
-                const [PlotlyModule, factoryModule] = await Promise.all([
-                    import('plotly.js-dist-min'),
-                    import('react-plotly.js/factory')
-                ]);
-                const Plotly = PlotlyModule.default;
-                const factory = factoryModule.default;
-                if (isMounted) setPlotComponent(() => factory(Plotly));
-            } catch (err) {}
-        };
-        loadPlotly();
-        return () => { isMounted = false; };
-    }, []);
-
-    useEffect(() => {
-        let isMounted = true;
-        const fetchTreemap = async () => {
-            try {
-                const res = await apiGet<any>('/api/market/treemap');
-                if (isMounted && res && res.length > 0) {
-                    setData(res);
-                }
-            } catch(e) {}
-        };
-        fetchTreemap();
-        const interval = setInterval(fetchTreemap, 60000);
-        return () => { isMounted = false; clearInterval(interval); };
-    }, []);
-
-    const labels: string[] = ["Indian Market"];
-    const parents: string[] = [""];
-    const values: number[] = [0];
-    const colors: string[] = ["#0f172a"];
-    const texts: string[] = [""];
-    
-    let totalMcap = 0;
-    const sectorMcap: Record<string, number> = {};
-    const sectors = Array.from(new Set(data.map(d => d.sector)));
-    
-    data.forEach(d => {
-        sectorMcap[d.sector] = (sectorMcap[d.sector] || 0) + (d.mcap || 100);
-        totalMcap += (d.mcap || 100);
-    });
-    
-    values[0] = totalMcap;
-    
-    sectors.forEach(s => {
-        labels.push(s);
-        parents.push("Indian Market");
-        values.push(sectorMcap[s] || 0);
-        colors.push("#1e293b"); 
-        texts.push("");
-    });
-    
-    data.forEach(d => {
-        labels.push(d.name);
-        parents.push(d.sector);
-        values.push(d.mcap || 100);
-        const color = d.change_pct >= 0 ? (d.change_pct > 1 ? '#059669' : '#10b981') : (d.change_pct < -1 ? '#be123c' : '#ef4444');
-        colors.push(color);
-        texts.push(`${d.change_pct >= 0 ? '+' : ''}${d.change_pct}%`);
-    });
-
-    const traces = [{
-        type: 'treemap',
-        labels,
-        parents,
-        values,
-        text: texts,
-        textinfo: "label+text",
-        textfont: { size: 14, color: '#ffffff', family: 'sans-serif' },
-        marker: { colors },
-        branchvalues: "total",
-        hovertemplate: '<b>%{label}</b><br>%{text}<extra></extra>'
-    }];
-
-    const layout = {
-        margin: { t: 0, l: 0, r: 0, b: 0 },
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        treemapcolorway: ['#1e293b'],
-        autosize: true
+  useEffect(() => {
+    let isMounted = true;
+    const loadPlotly = async () => {
+      try {
+        const [PlotlyModule, factoryModule] = await Promise.all([
+          import('plotly.js-dist-min'),
+          import('react-plotly.js/factory')
+        ]);
+        const Plotly = PlotlyModule.default;
+        const factory = factoryModule.default;
+        if (isMounted) setPlotComponent(() => factory(Plotly));
+      } catch (err) { }
     };
+    loadPlotly();
+    return () => { isMounted = false; };
+  }, []);
 
-    return (
-        <div className="glass-panel flex flex-col border border-slate-800/80 bg-slate-950/40 md:col-span-2 overflow-hidden h-[450px]">
-            <div className="flex items-center justify-between p-4 pb-2 border-b border-slate-800/50">
-                <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-2">
-                    <Activity className="text-sky-400" size={14} /> LIVE SECTOR HEATMAP
-                </h3>
-            </div>
-            <div className="flex-1 w-full h-full relative">
-                {data.length > 0 ? (
-                    <SafePlot 
-                        component={PlotComponent}
-                        data={traces}
-                        layout={layout}
-                        config={{ displayModeBar: false, responsive: true }}
-                        className="w-full h-full"
-                    />
-                ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                        <div className="w-8 h-8 border-2 border-sky-500/20 border-t-sky-500 rounded-full animate-spin mb-3"></div>
-                        <p className="text-[10px] font-bold tracking-widest uppercase">Fetching Treemap Data...</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTreemap = async () => {
+      try {
+        const res = await apiGet<any>('/api/market/treemap');
+        if (isMounted && res && res.length > 0) {
+          setData(res);
+        }
+      } catch (e) { }
+    };
+    fetchTreemap();
+    const interval = setInterval(fetchTreemap, 60000);
+    return () => { isMounted = false; clearInterval(interval); };
+  }, []);
+
+  const labels: string[] = ["Indian Market"];
+  const parents: string[] = [""];
+  const values: number[] = [0];
+  const colors: string[] = ["#0f172a"];
+  const texts: string[] = [""];
+
+  let totalMcap = 0;
+  const sectorMcap: Record<string, number> = {};
+  const sectors = Array.from(new Set(data.map(d => d.sector)));
+
+  data.forEach(d => {
+    sectorMcap[d.sector] = (sectorMcap[d.sector] || 0) + (d.mcap || 100);
+    totalMcap += (d.mcap || 100);
+  });
+
+  values[0] = totalMcap;
+
+  sectors.forEach(s => {
+    labels.push(s);
+    parents.push("Indian Market");
+    values.push(sectorMcap[s] || 0);
+    colors.push("#1e293b");
+    texts.push("");
+  });
+
+  data.forEach(d => {
+    labels.push(d.name);
+    parents.push(d.sector);
+    values.push(d.mcap || 100);
+    const color = d.change_pct >= 0 ? (d.change_pct > 1 ? '#059669' : '#10b981') : (d.change_pct < -1 ? '#be123c' : '#ef4444');
+    colors.push(color);
+    texts.push(`${d.change_pct >= 0 ? '+' : ''}${d.change_pct}%`);
+  });
+
+  const traces = [{
+    type: 'treemap',
+    labels,
+    parents,
+    values,
+    text: texts,
+    textinfo: "label+text",
+    textfont: { size: 14, color: '#ffffff', family: 'sans-serif' },
+    marker: { colors },
+    branchvalues: "total",
+    hovertemplate: '<b>%{label}</b><br>%{text}<extra></extra>'
+  }];
+
+  const layout = {
+    margin: { t: 0, l: 0, r: 0, b: 0 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    treemapcolorway: ['#1e293b'],
+    autosize: true
+  };
+
+  return (
+    <div className="glass-panel flex flex-col border border-[var(--color-border)] bg-[var(--color-card)] md:col-span-2 overflow-hidden h-[450px]">
+      <div className="flex items-center justify-between p-4 pb-2 border-b border-[var(--color-border)]">
+        <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-2">
+          <Activity className="text-sky-400" size={14} /> LIVE SECTOR HEATMAP
+        </h3>
+      </div>
+      <div className="flex-1 w-full h-full relative">
+        {data.length > 0 ? (
+          <SafePlot
+            component={PlotComponent}
+            data={traces}
+            layout={layout}
+            config={{ displayModeBar: false, responsive: true }}
+            className="w-full h-full"
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--color-text-main)]">
+            <div className="w-8 h-8 border-2 border-sky-500/20 border-t-sky-500 rounded-full animate-spin mb-3"></div>
+            <p className="text-[10px] font-bold tracking-widest uppercase">Fetching Treemap Data...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent }: { events: GeoEvent[], scenarioData: any, onSelectEvent?: (ev: GeoEvent) => void }) {
@@ -620,35 +622,35 @@ function ImpactMetricsCards({ events, scenarioData: _scenarioData, onSelectEvent
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2 select-none">
       {/* Top High Impact Events */}
-      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-slate-800/80 bg-slate-950/40 min-h-[250px]">
-        <h3 className="text-xs font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
-          <AlertTriangle className="text-red-500 animate-pulse" size={14} /> Top High Impact Events
+      <div className="glass-panel p-5 flex flex-col gap-3.5 border border-[var(--color-border)] bg-[var(--color-card)] min-h-[250px]">
+        <h3 className="text-sm md:text-base font-extrabold text-[var(--color-text-main)] tracking-wider uppercase flex items-center gap-2">
+          <AlertTriangle className="text-red-500 animate-pulse" size={16} /> Top High Impact Events
         </h3>
-        <div className="flex-1 flex flex-col gap-3 justify-start overflow-y-auto max-h-[300px] scrollbar-thin pr-1">
+        <div className="flex-1 flex flex-col gap-3 justify-start overflow-y-auto max-h-[350px] scrollbar-thin pr-1">
           {highImpactEvents.length > 0 ? (
             highImpactEvents.map((ev) => (
-              <div 
-                key={ev.id} 
+              <div
+                key={ev.id}
                 onClick={() => onSelectEvent?.(ev)}
-                className="flex flex-col gap-1 p-2.5 rounded bg-slate-900/40 border border-slate-800/50 hover:border-red-500/50 hover:bg-slate-900/80 transition-all cursor-pointer"
+                className="flex flex-col gap-1.5 p-3 rounded-xl bg-[var(--color-card)] border border-[var(--color-border)] hover:border-red-500/50 hover:bg-[var(--color-card)] transition-all cursor-pointer shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-[9px] text-red-400 font-bold bg-red-950/40 border border-red-900/30 px-1.5 py-0.5 rounded tracking-wider uppercase">
+                  <span className="text-xs text-red-500 dark:text-red-400 font-extrabold bg-red-500/10 border border-red-500/25 px-2.5 py-0.5 rounded-md tracking-wider uppercase">
                     {ev.severity} impact
                   </span>
-                  <span className="text-[8px] text-slate-500">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono font-semibold">
                     {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <h4 className="text-[11px] font-bold text-white leading-snug">{ev.headline}</h4>
-                <p className="text-[9px] text-slate-450 leading-relaxed font-mono mt-1 border-l border-slate-800 pl-1.5 max-h-[50px] overflow-y-auto scrollbar-thin whitespace-pre-wrap">
+                <h4 className="text-sm md:text-base font-extrabold text-slate-900 dark:text-[var(--color-text-main)] leading-snug">{ev.headline}</h4>
+                <p className="text-xs md:text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans mt-0.5 border-l-2 border-red-500/30 pl-2.5 max-h-[75px] overflow-y-auto scrollbar-thin whitespace-pre-wrap">
                   {ev.summary}
                 </p>
-                <span className="text-[8px] text-slate-500 mt-1 flex items-center gap-0.5">📍 {ev.city}{ev.country ? `, ${ev.country}` : ''}</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-1">📍 {ev.city}{ev.country ? `, ${ev.country}` : ''}</span>
               </div>
             ))
           ) : (
-            <div className="text-center py-6 text-slate-500 text-xs italic">
+            <div className="text-center py-6 text-[var(--color-text-main)] text-sm italic">
               No critical or high impact events active in this timeframe.
             </div>
           )}
@@ -726,18 +728,18 @@ function DailyPerformanceCard() {
 
   if (loading) {
     return (
-      <div className="glass-panel p-6 flex flex-col items-center justify-center min-h-[200px] border border-slate-800/80 bg-slate-950/40">
+      <div className="glass-panel p-6 flex flex-col items-center justify-center min-h-[200px] border border-[var(--color-border)] bg-[var(--color-card)]">
         <Activity className="animate-pulse text-neonBlue mb-2" size={24} />
-        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider animate-pulse">Syncing Live Market Data...</span>
+        <span className="text-[10px] text-[var(--color-text-main)] font-bold uppercase tracking-wider animate-pulse">Syncing Live Market Data...</span>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="glass-panel p-6 text-center border border-slate-800/80 bg-slate-950/40">
+      <div className="glass-panel p-6 text-center border border-[var(--color-border)] bg-[var(--color-card)]">
         <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Market Data Offline</span>
-        <p className="text-[9px] text-slate-500 mt-1">Unable to fetch daily performance metrics at this time.</p>
+        <p className="text-[9px] text-[var(--color-text-main)] mt-1">Unable to fetch daily performance metrics at this time.</p>
       </div>
     );
   }
@@ -751,79 +753,79 @@ function DailyPerformanceCard() {
   const underperformingStocks = data.stocks.filter(s => s.change_pct < 0).sort((a, b) => a.change_pct - b.change_pct);
 
   return (
-    <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4 mt-6">
+    <div className="glass-panel p-5 md:p-6 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4 mt-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-2">
-            <Activity className="text-neonBlue animate-pulse" size={14} /> DAILY PERFORMANCE CROSS-CHECK
+          <h3 className="text-sm md:text-base font-black text-[var(--color-text-main)] tracking-wider uppercase flex items-center gap-2">
+            <Activity className="text-neonBlue animate-pulse" size={16} /> DAILY PERFORMANCE CROSS-CHECK
           </h3>
-          <p className="text-[9px] text-slate-500 mt-0.5">Compare active sector risks and AI beneficiaries against real-time market performance</p>
+          <p className="text-xs md:text-sm text-slate-600 dark:text-slate-300 mt-1 font-medium">Compare active sector risks and AI beneficiaries against real-time market performance</p>
         </div>
         {isFallback ? (
-          <span className="text-[8px] bg-amber-500/10 text-amber-400 font-bold border border-amber-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span> Offline Cache
+          <span className="text-xs bg-amber-500/10 text-amber-500 font-bold border border-amber-500/20 px-2.5 py-1 rounded-md uppercase tracking-wider flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-amber-400 rounded-full"></span> Offline Cache
           </span>
         ) : (
-          <span className="text-[8px] bg-sky-500/10 text-sky-400 font-bold border border-sky-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse"></span> Live
+          <span className="text-xs bg-sky-500/10 text-sky-500 dark:text-sky-400 font-bold border border-sky-500/20 px-2.5 py-1 rounded-md uppercase tracking-wider flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-sky-400 rounded-full animate-pulse"></span> Live
           </span>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* SECTORS PERFORMANCE COMPARISON */}
-        <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-lg flex flex-col gap-3">
-          <h4 className="text-[10px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 pb-2">
+        <div className="p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl flex flex-col gap-3.5 shadow-sm">
+          <h4 className="text-xs md:text-sm font-black text-[var(--color-text-main)] tracking-wider uppercase border-b border-[var(--color-border)] pb-2.5">
             Sectors Heat Check
           </h4>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* PERFORMING SECTORS */}
             <div className="flex flex-col gap-2">
-              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1">
                 ▲ Performing
               </span>
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin pr-1">
                 {performingSectors.length > 0 ? (
                   performingSectors.map((s, i) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
-                      <div className="min-w-0">
-                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
-                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                    <div key={i} className="flex justify-between items-center bg-[var(--color-card)] p-2.5 rounded-lg border border-[var(--color-border)] hover:border-emerald-500/30 transition-all">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-xs md:text-sm text-slate-900 dark:text-slate-100 font-extrabold block truncate">{s.name}</span>
+                        <span className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{s.symbol}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
-                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs md:text-sm text-emerald-600 dark:text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-mono font-semibold">₹{s.price}</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <span className="text-[9px] text-slate-600 italic">No sectors in green</span>
+                  <span className="text-xs text-slate-500 italic">No sectors in green</span>
                 )}
               </div>
             </div>
 
             {/* UNDERPERFORMING SECTORS */}
             <div className="flex flex-col gap-2">
-              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1">
+              <span className="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1">
                 ▼ Underperforming
               </span>
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin pr-1">
                 {underperformingSectors.length > 0 ? (
                   underperformingSectors.map((s, i) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
-                      <div className="min-w-0">
-                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
-                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                    <div key={i} className="flex justify-between items-center bg-[var(--color-card)] p-2.5 rounded-lg border border-[var(--color-border)] hover:border-rose-500/30 transition-all">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-xs md:text-sm text-slate-900 dark:text-slate-100 font-extrabold block truncate">{s.name}</span>
+                        <span className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{s.symbol}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
-                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs md:text-sm text-rose-600 dark:text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-mono font-semibold">₹{s.price}</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <span className="text-[9px] text-slate-600 italic">No sectors in red</span>
+                  <span className="text-xs text-slate-500 italic">No sectors in red</span>
                 )}
               </div>
             </div>
@@ -831,58 +833,58 @@ function DailyPerformanceCard() {
         </div>
 
         {/* BENEFICIARIES PERFORMANCE COMPARISON */}
-        <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-lg flex flex-col gap-3">
-          <h4 className="text-[10px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 pb-2">
+        <div className="p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl flex flex-col gap-3.5 shadow-sm">
+          <h4 className="text-xs md:text-sm font-black text-[var(--color-text-main)] tracking-wider uppercase border-b border-[var(--color-border)] pb-2.5">
             AI Beneficiaries Validation
           </h4>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* PERFORMING BENEFICIARIES */}
             <div className="flex flex-col gap-2">
-              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1">
                 ▲ Performing
               </span>
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin pr-1">
                 {performingStocks.length > 0 ? (
                   performingStocks.map((s, i) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
-                      <div className="min-w-0">
-                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
-                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                    <div key={i} className="flex justify-between items-center bg-[var(--color-card)] p-2.5 rounded-lg border border-[var(--color-border)] hover:border-emerald-500/30 transition-all">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-xs md:text-sm text-slate-900 dark:text-slate-100 font-extrabold block truncate">{s.name}</span>
+                        <span className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{s.symbol}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
-                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs md:text-sm text-emerald-600 dark:text-emerald-400 font-black block">+{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-mono font-semibold">₹{s.price}</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <span className="text-[9px] text-slate-600 italic">No stocks in green</span>
+                  <span className="text-xs text-slate-500 italic">No stocks in green</span>
                 )}
               </div>
             </div>
 
             {/* UNDERPERFORMING BENEFICIARIES */}
             <div className="flex flex-col gap-2">
-              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1">
+              <span className="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1">
                 ▼ Underperforming
               </span>
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin pr-1">
                 {underperformingStocks.length > 0 ? (
                   underperformingStocks.map((s, i) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-800/40">
-                      <div className="min-w-0">
-                        <span className="text-[10px] text-slate-200 font-bold block truncate">{s.name}</span>
-                        <span className="text-[8px] text-slate-500 font-mono font-medium">{s.symbol}</span>
+                    <div key={i} className="flex justify-between items-center bg-[var(--color-card)] p-2.5 rounded-lg border border-[var(--color-border)] hover:border-rose-500/30 transition-all">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-xs md:text-sm text-slate-900 dark:text-slate-100 font-extrabold block truncate">{s.name}</span>
+                        <span className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{s.symbol}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
-                        <span className="text-[8px] text-slate-500 font-mono">₹{s.price}</span>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs md:text-sm text-rose-600 dark:text-rose-400 font-black block">{s.change_pct.toFixed(2)}%</span>
+                        <span className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-mono font-semibold">₹{s.price}</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <span className="text-[9px] text-slate-600 italic">No stocks in red</span>
+                  <span className="text-xs text-slate-500 italic">No stocks in red</span>
                 )}
               </div>
             </div>
@@ -897,7 +899,7 @@ function DailyPerformanceCard() {
 
 function App() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'research'>('news');
+  const [activeTab, setActiveTab] = useState<'news' | 'charts' | 'calendar' | 'research' | 'screener' | 'theme_analysis'>('news');
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
@@ -908,16 +910,20 @@ function App() {
   const [newsData, setNewsData] = useState<LiveEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<GeoEvent | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<{ [key: string]: { loading: boolean, text: string | null } }>({});
-  
+
   const [selectedEventChain, setSelectedEventChain] = useState<any>(null);
   const [eventChainLoading, setEventChainLoading] = useState(false);
   const [mapViewMode, setMapViewMode] = useState<'earth' | 'space'>('earth');
-  const [theme, setTheme] = useState<'default' | 'neon-black' | 'neon-white'>('default');
-  
+  const [theme, setTheme] = useState<'broken-glass' | 'neon-black'>(() => {
+    const saved = localStorage.getItem('app_theme');
+    return saved === 'neon-black' ? 'neon-black' : 'broken-glass';
+  });
+
   useEffect(() => {
-    document.body.className = theme === 'default' ? '' : `theme-${theme}`;
+    document.body.className = `theme-${theme}`;
+    localStorage.setItem('app_theme', theme);
   }, [theme]);
-  
+
   const [activeProvider, setActiveProvider] = useState<string>('gemini_with_fallback');
 
   const handleProviderChange = async (provider: string) => {
@@ -937,7 +943,7 @@ function App() {
       setSelectedEventChain(null);
       return;
     }
-    
+
     let active = true;
     const fetchChain = async () => {
       setEventChainLoading(true);
@@ -987,9 +993,9 @@ function App() {
   const [chainResult, setChainResult] = useState<any>(null);
   const [chainInput, setChainInput] = useState('');
   const [chainLoading, setChainLoading] = useState(false);
-  
+
   // Tactical Advisor State
-  const [tacticalAdvisor, setTacticalAdvisor] = useState<{show: boolean, loading: boolean, title: string, content: string}>({
+  const [tacticalAdvisor, setTacticalAdvisor] = useState<{ show: boolean, loading: boolean, title: string, content: string }>({
     show: false,
     loading: false,
     title: '',
@@ -1117,7 +1123,7 @@ function App() {
         setCalendarLoading(false);
       }
     };
-    
+
     if (activeTab === 'calendar') {
       fetchCalendar();
     }
@@ -1147,7 +1153,7 @@ function App() {
     try {
       const response = await fetch(`/api/analyze_impact`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
@@ -1228,32 +1234,48 @@ function App() {
   const AGENT_KEYS = ['news_scanner', 'indian_market_tracker', 'scenario_intelligence'] as const;
 
   return (
-    <div className="min-h-screen p-4 md:p-8 flex flex-col gap-6">
+    <div className="min-h-screen p-4 md:p-8 flex flex-col gap-6 relative overflow-x-hidden">
+      {/* Background Effects (Only active on Live News / Monitor tab to avoid multi-WebGL GPU context lag) */}
+      {activeTab === 'news' && (
+        <div className="fixed inset-0 z-[-1] pointer-events-none mix-blend-screen opacity-100 transition-transform duration-1000">
+          <ParticleGlobe theme={theme} />
+        </div>
+      )}
+
+      {/* CSS Globe Simulation for Broken Glass theme */}
+      {theme === 'broken-glass' && (
+        <div className="fixed top-1/2 right-0 translate-x-[15%] -translate-y-1/2 w-[700px] h-[700px] xl:w-[850px] xl:h-[850px] pointer-events-none z-[-1]">
+          <div
+            className="absolute inset-0 w-full h-full rounded-full border border-white/40"
+            style={{ background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(0, 82, 204, 0.1))', boxShadow: '0 0 50px rgba(255,255,255,0.7), inset 0 0 50px rgba(255,255,255,1)', animation: 'float 6s ease-in-out infinite' }}
+          ></div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-2 mt-2">
         <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-1 flex items-center gap-3 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-[var(--color-text-main)] mb-1 flex items-center gap-3 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]">
             <img src="/logo-icon.png" alt="Artillegence AI" className="w-10 h-10 min-w-[40px] flex-shrink-0 object-cover rounded-lg shadow-[0_0_15px_rgba(56,189,248,0.4)]" />
             Artillegence <span className="text-neonBlue font-light">AI</span>
           </h1>
-          <p className="text-slate-400 text-sm font-medium">AI-Powered Stock Market News Intelligence System</p>
+          <p className="text-[var(--color-text-main)] text-sm font-medium">AI-Powered Stock Market News Intelligence System</p>
         </div>
         <div className="glass-panel px-5 py-2 mt-3 md:mt-0 flex items-center gap-4">
-          <select 
-            value={theme} 
+          <select
+            value={theme}
             onChange={(e) => setTheme(e.target.value as any)}
-            className="bg-slate-900/80 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 outline-none focus:border-neonBlue"
+            className="bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-text-main)] text-xs rounded px-2 py-1 outline-none focus:border-neonBlue"
           >
-            <option value="default">Neon Blue (Default)</option>
+            <option value="broken-glass">Broken Glass (White)</option>
             <option value="neon-black">Neon Black</option>
-            <option value="neon-white">Neon White</option>
           </select>
           <div className="flex items-center gap-3">
             <div className="relative flex h-3 w-3">
               {connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neonBlue opacity-75"></span>}
               <span className={`relative inline-flex rounded-full h-3 w-3 ${connected ? 'bg-neonBlue' : 'bg-red-500'}`}></span>
             </div>
-            <span className="text-xs font-semibold tracking-wider text-slate-300">
+            <span className="text-xs font-semibold tracking-wider text-[var(--color-text-main)]">
               {connected ? 'SYSTEM ONLINE' : 'CONNECTING...'}
             </span>
           </div>
@@ -1261,30 +1283,42 @@ function App() {
       </header>
 
       {/* ── Tab Navigation Bar ── */}
-      <nav className="flex items-center gap-2 mt-4 border-b border-slate-800 pb-[1px]">
+      <nav className="flex items-center gap-2 mt-4 border-b border-[var(--color-border)] pb-[1px]">
         <button
           onClick={() => setActiveTab('news')}
-          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'news' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'news' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
         >
           WORLD NEWS
         </button>
         <button
           onClick={() => setActiveTab('charts')}
-          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'charts' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'charts' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
         >
           CHARTS
         </button>
         <button
           onClick={() => setActiveTab('calendar')}
-          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'calendar' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'calendar' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
         >
           CALENDAR
         </button>
         <button
           onClick={() => setActiveTab('research')}
-          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'research' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-slate-800/60 shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border-b-[3px] border-transparent'}`}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'research' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
         >
           RESEARCH
+        </button>
+        <button
+          onClick={() => setActiveTab('screener')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'screener' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
+        >
+          SCREENER
+        </button>
+        <button
+          onClick={() => setActiveTab('theme_analysis')}
+          className={`px-5 py-2.5 font-bold tracking-widest text-xs rounded-t-lg transition-all ${activeTab === 'theme_analysis' ? 'text-neonBlue border-b-[3px] border-neonBlue bg-[var(--color-card)] shadow-[inset_0_-4px_10px_rgba(56,189,248,0.1)]' : 'text-[var(--color-text-main)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-card)] border-b-[3px] border-transparent'}`}
+        >
+          THEME ANALYSIS
         </button>
       </nav>
 
@@ -1296,21 +1330,21 @@ function App() {
               <div className="absolute top-4 left-4 z-[9999] flex gap-2">
                 <button
                   onClick={() => setMapViewMode('earth')}
-                  className={`px-3 py-1.5 rounded text-xs font-bold tracking-widest backdrop-blur-md shadow-lg transition-colors border ${mapViewMode === 'earth' ? 'bg-neonBlue/20 border-neonBlue text-neonBlue' : 'bg-slate-900/60 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                  className={`px-3 py-1.5 rounded text-xs font-bold tracking-widest backdrop-blur-md shadow-lg transition-colors border ${mapViewMode === 'earth' ? 'bg-neonBlue/20 border-neonBlue text-neonBlue' : 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-text-main)] hover:bg-[var(--color-card)]'}`}
                 >
                   EARTH VIEW
                 </button>
                 <button
                   onClick={() => setMapViewMode('space')}
-                  className={`px-3 py-1.5 rounded text-xs font-bold tracking-widest backdrop-blur-md shadow-lg transition-colors border ${mapViewMode === 'space' ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-slate-900/60 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                  className={`px-3 py-1.5 rounded text-xs font-bold tracking-widest backdrop-blur-md shadow-lg transition-colors border ${mapViewMode === 'space' ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-text-main)] hover:bg-[var(--color-card)]'}`}
                 >
                   SPACE VIEW
                 </button>
               </div>
               <Suspense fallback={
-                <div className="flex flex-col items-center justify-center h-full bg-slate-900/20 backdrop-blur-sm">
+                <div className="flex flex-col items-center justify-center h-full bg-[var(--color-card)] backdrop-blur-sm">
                   <Globe className="animate-spin-slow text-neonBlue mb-4" size={48} />
-                  <span className="text-slate-500 ml-3">Loading Map...</span>
+                  <span className="text-[var(--color-text-main)] ml-3">Loading Map...</span>
                 </div>
               }>
                 {mapViewMode === 'earth' ? (
@@ -1326,15 +1360,15 @@ function App() {
             <DailyPerformanceCard />
           </div>
           <div className="lg:col-span-1 flex flex-col gap-6">
-            <TelegramFeed 
-              data={combinedTelegramData} 
-              geoEvents={geoEvents} 
-              onSelectEvent={setSelectedEvent} 
+            <TelegramFeed
+              data={combinedTelegramData}
+              geoEvents={geoEvents}
+              onSelectEvent={setSelectedEvent}
             />
-            <EventDetailsSidebar 
-              activeEvent={selectedEvent} 
-              activeAnalysis={activeAnalysis} 
-              onAnalyze={handleAnalyze} 
+            <EventDetailsSidebar
+              activeEvent={selectedEvent}
+              activeAnalysis={activeAnalysis}
+              onAnalyze={handleAnalyze}
               activeEventChain={selectedEventChain}
               chainLoading={eventChainLoading}
             />
@@ -1345,7 +1379,7 @@ function App() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="flex flex-col gap-4 lg:col-span-1">
             <div className="glass-panel p-4">
-              <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2 tracking-wider">
+              <h2 className="text-sm font-bold text-[var(--color-text-main)] mb-4 flex items-center gap-2 tracking-wider">
                 <Cpu className="text-neonPurple" size={16} /> AI AGENTS
               </h2>
               <div className="space-y-2">
@@ -1354,21 +1388,21 @@ function App() {
             </div>
             <div className="glass-panel p-4 text-center">
               <div className="text-4xl font-black text-neonBlue drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]">{events.length}</div>
-              <div className="text-xs text-slate-500 mt-1">intelligence events</div>
+              <div className="text-xs text-[var(--color-text-main)] mt-1">intelligence events</div>
             </div>
           </div>
 
           {/* Market Summary */}
           <div className="glass-panel p-5 lg:col-span-3 flex flex-col" style={{ maxHeight: '520px' }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[var(--color-text-main)] flex items-center gap-2">
                 <Satellite className="text-neonBlue" size={18} /> LIVE MARKET BRIEFING
               </h2>
               <div className="flex items-center gap-3">
                 <select
                   value={activeProvider}
                   onChange={(e) => handleProviderChange(e.target.value as any)}
-                  className="bg-slate-900 border border-slate-700 text-xs text-white px-2 py-1 rounded outline-none cursor-pointer focus:border-neonBlue transition-colors"
+                  className="bg-[var(--color-card)] border border-[var(--color-border)] text-xs text-[var(--color-text-main)] px-2 py-1 rounded outline-none cursor-pointer focus:border-neonBlue transition-colors"
                 >
                   <option value="gemini_with_fallback">Smart Free (Gemini/Groq)</option>
                   <option value="gemini">Google Gemini</option>
@@ -1376,9 +1410,9 @@ function App() {
                   <option value="mistral">Mistral AI</option>
                   <option value="openrouter">Nemotron AI</option>
                 </select>
-                <button 
-                  onClick={() => apiPost('/api/refresh_briefing', {})} 
-                  className="text-xs text-slate-500 hover:text-white transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
+                <button
+                  onClick={() => apiPost('/api/refresh_briefing', {})}
+                  className="text-xs text-[var(--color-text-main)] hover:text-[var(--color-text-main)] transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
                   title="Manual Refresh"
                 >
                   <RefreshCw size={10} /> Daily
@@ -1387,9 +1421,9 @@ function App() {
             </div>
             <div className="flex-1 overflow-y-auto mb-4 pr-1">
               {latestNewsScan ? (
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{latestNewsScan.summary}</p>
+                <p className="text-sm text-[var(--color-text-main)] leading-relaxed whitespace-pre-line">{latestNewsScan.summary}</p>
               ) : (
-                <div className="flex flex-col items-center justify-center h-32 text-slate-500 opacity-60">
+                <div className="flex flex-col items-center justify-center h-32 text-[var(--color-text-main)] opacity-60">
                   <Radio className="animate-pulse mb-2" size={32} />
                   <p className="text-sm">News Scanner booting up... first briefing in ~1 minute</p>
                 </div>
@@ -1397,7 +1431,7 @@ function App() {
             </div>
             {latestNewsScan?.news_items && latestNewsScan.news_items.length > 0 && (
               <div>
-                <h3 className="text-xs font-bold text-slate-500 tracking-widest mb-2">NEWS SOURCES</h3>
+                <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest mb-2">NEWS SOURCES</h3>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
                   {latestNewsScan.news_items.map((item, i) => <NewsCard key={i} item={item} />)}
                 </div>
@@ -1433,7 +1467,7 @@ function App() {
         <Suspense fallback={
           <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px]">
             <Activity className="animate-pulse text-neonBlue mb-4" size={48} />
-            <span className="text-slate-400 font-bold tracking-widest">LOADING TRADING/AI ANALYST...</span>
+            <span className="text-[var(--color-text-main)] font-bold tracking-widest">LOADING TRADING/AI ANALYST...</span>
           </div>
         }>
           <div style={{ display: activeTab === 'charts' ? 'block' : 'none' }}>
@@ -1454,8 +1488,34 @@ function App() {
         </div>
       )}
 
+      {activeTab === 'screener' && (
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px]">
+            <Activity className="animate-pulse text-neonBlue mb-4" size={48} />
+            <span className="text-[var(--color-text-main)] font-bold tracking-widest">LOADING QUANT SCREENER...</span>
+          </div>
+        }>
+          <div className="animate-fade-in">
+            <ScreenerTab />
+          </div>
+        </Suspense>
+      )}
+
+      {activeTab === 'theme_analysis' && (
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-20 glass-panel h-[700px]">
+            <Activity className="animate-pulse text-neonBlue mb-4" size={48} />
+            <span className="text-[var(--color-text-main)] font-bold tracking-widest">LOADING THEME ANALYSIS...</span>
+          </div>
+        }>
+          <div className="animate-fade-in">
+            <ThemeAnalysisTab />
+          </div>
+        </Suspense>
+      )}
+
       {/* Tactical Advisor Modal */}
-      <TacticalAdvisorModal 
+      <TacticalAdvisorModal
         show={tacticalAdvisor.show}
         loading={tacticalAdvisor.loading}
         title={tacticalAdvisor.title}
@@ -1485,10 +1545,10 @@ export function SentimentGauge({ analysis }: { analysis: string }) {
       </div>
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <div className="flex justify-between text-[9px] text-slate-500 mb-1">
+          <div className="flex justify-between text-[9px] text-[var(--color-text-main)] mb-1">
             <span>Bearish</span><span>Neutral</span><span>Bullish</span>
           </div>
-          <div className="h-3 bg-slate-800 rounded-full overflow-hidden relative">
+          <div className="h-3 bg-[var(--color-card)] rounded-full overflow-hidden relative">
             <div className="absolute inset-0 flex">
               <div className="w-[30%] bg-gradient-to-r from-red-500/30 to-red-500/10"></div>
               <div className="w-[40%] bg-gradient-to-r from-amber-500/10 to-amber-500/10"></div>
@@ -1515,7 +1575,7 @@ export function SectorHeatMap({ analysis }: { analysis: string }) {
           <BarChart3 size={16} className="text-amber-400" />
           <h3 className="text-xs font-bold tracking-wider text-slate-100">SECTOR HEAT MAP</h3>
         </div>
-        <p className="text-[10px] text-slate-500">Sectors loading... will appear after Market Analyzer completes.</p>
+        <p className="text-[10px] text-[var(--color-text-main)]">Sectors loading... will appear after Market Analyzer completes.</p>
       </div>
     );
   }
@@ -1534,7 +1594,7 @@ export function SectorHeatMap({ analysis }: { analysis: string }) {
       <div className="grid grid-cols-4 gap-1.5">
         {sectors.map((s) => (
           <div key={s.name} className={`${getColor(s.score)} rounded-lg p-2 text-center transition-all hover:scale-105`}>
-            <div className="text-[9px] font-bold text-white">{s.name}</div>
+            <div className="text-[9px] font-bold text-[var(--color-text-main)]">{s.name}</div>
             <div className={`text-lg font-black ${getTextColor(s.score)}`}>{s.score}</div>
           </div>
         ))}
@@ -1569,20 +1629,20 @@ export function FIIDIIFlow({ analysis }: { analysis: string }) {
       <div className="space-y-3">
         <div>
           <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-slate-400 font-medium">FII (Foreign)</span>
+            <span className="text-[var(--color-text-main)] font-medium">FII (Foreign)</span>
             <span className={`font-bold ${fiiTextColor}`}>{fiiDirection}</span>
           </div>
-          <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-2.5 bg-[var(--color-card)] rounded-full overflow-hidden">
             <div className={`h-full ${fiiColor} rounded-full transition-all duration-500`}
               style={{ width: isFIIBuying ? '75%' : isFIISelling ? '25%' : '50%' }}></div>
           </div>
         </div>
         <div>
           <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-slate-400 font-medium">DII (Domestic)</span>
+            <span className="text-[var(--color-text-main)] font-medium">DII (Domestic)</span>
             <span className={`font-bold ${diiTextColor}`}>{diiDirection}</span>
           </div>
-          <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-2.5 bg-[var(--color-card)] rounded-full overflow-hidden">
             <div className={`h-full ${diiColor} rounded-full transition-all duration-500`}
               style={{ width: isDIIBuying ? '75%' : isDIISelling ? '25%' : '50%' }}></div>
           </div>
@@ -1609,14 +1669,14 @@ function NewsCard({ item }: { item: NewsItem }) {
 
   return (
     <a href={item.url} target="_blank" rel="noopener noreferrer"
-      className="flex-shrink-0 w-56 bg-slate-900/60 rounded-lg border border-slate-800 hover:border-neonBlue/50 transition-all duration-200 group overflow-hidden">
+      className="flex-shrink-0 w-56 bg-[var(--color-card)] rounded-lg border border-[var(--color-border)] hover:border-neonBlue/50 transition-all duration-200 group overflow-hidden">
       {hasImage ? (
-        <div className="w-full h-20 overflow-hidden bg-slate-800 flex items-center justify-center relative">
-          <img 
-            src={item.image} 
-            alt="" 
+        <div className="w-full h-20 overflow-hidden bg-[var(--color-card)] flex items-center justify-center relative">
+          <img
+            src={item.image}
+            alt=""
             className={`w-full h-full ${(item.image?.includes('gstatic.com') || item.image?.includes('googleusercontent.com') || item.image?.includes('news.google.com')) ? 'object-contain p-2' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
-            onError={() => setImgError(true)} 
+            onError={() => setImgError(true)}
           />
         </div>
       ) : (
@@ -1624,16 +1684,16 @@ function NewsCard({ item }: { item: NewsItem }) {
           {faviconUrl && (
             <img src={faviconUrl} alt="" className="w-6 h-6 rounded opacity-80" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           )}
-          <Newspaper size={20} className="text-white/30 absolute right-2 bottom-2" />
+          <Newspaper size={20} className="text-[var(--color-text-main)]/30 absolute right-2 bottom-2" />
         </div>
       )}
       <div className="p-2.5">
-        <p className="text-[11px] text-white font-medium line-clamp-2 group-hover:text-neonBlue transition leading-tight">{item.title}</p>
+        <p className="text-[11px] text-[var(--color-text-main)] font-medium line-clamp-2 group-hover:text-neonBlue transition leading-tight">{item.title}</p>
         <div className="flex items-center justify-between mt-1.5 mb-1.5">
           <span className="text-[9px] text-sky-400 truncate max-w-[120px]">{item.source}</span>
           <ExternalLink size={8} className="text-slate-600 group-hover:text-neonBlue flex-shrink-0" />
         </div>
-        <button 
+        <button
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1668,16 +1728,16 @@ function AgentCard({ agentKey, info }: { agentKey: string; info?: AgentInfo }) {
   const statusStyle = status === 'active' ? 'text-neonBlue bg-neonBlue/20'
     : status === 'idle' ? 'text-amber-400 bg-amber-400/20'
       : status === 'error' ? 'text-red-500 bg-red-500/20'
-        : 'text-slate-500 bg-slate-500/20';
+        : 'text-[var(--color-text-main)] bg-slate-500/20';
 
   return (
-    <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/40 border border-slate-800/50">
+    <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)]">
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-slate-400 flex-shrink-0">{cfg.icon}</span>
+        <span className="text-[var(--color-text-main)] flex-shrink-0">{cfg.icon}</span>
         <div className="min-w-0">
           <span className="text-[11px] font-medium text-slate-200 block truncate">{cfg.label}</span>
           {info?.last_run && (
-            <span className="text-[9px] text-slate-500">
+            <span className="text-[9px] text-[var(--color-text-main)]">
               #{info.cycle_count} · {new Date(info.last_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
@@ -1712,21 +1772,21 @@ function AgentSection({
     <div className={`glass-panel p-5 ${borderColors[accentColor] || ''}`}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">{icon}{title}</h2>
-          <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>
+          <h2 className="text-sm font-bold text-[var(--color-text-main)] flex items-center gap-2">{icon}{title}</h2>
+          <p className="text-[10px] text-[var(--color-text-main)] mt-0.5">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           {onRefresh && (
-            <button 
+            <button
               onClick={onRefresh}
-              className="text-[10px] text-slate-500 hover:text-white transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
+              className="text-[10px] text-[var(--color-text-main)] hover:text-[var(--color-text-main)] transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
               title="Manual Refresh"
             >
               <RefreshCw size={10} /> Daily
             </button>
           )}
           {event && (
-            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+            <span className="text-[10px] text-[var(--color-text-main)] flex items-center gap-1">
               <Clock size={10} />
               {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -1736,15 +1796,15 @@ function AgentSection({
 
       {event ? (
         <div>
-          <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line mb-4"
+          <div className="text-sm text-[var(--color-text-main)] leading-relaxed whitespace-pre-line mb-4"
             style={{ maxHeight: fullWidth ? '400px' : '250px', overflow: 'auto' }}>
             {event.summary}
           </div>
 
           {/* Source citations */}
           {event.sources && event.sources.length > 0 && (
-            <div className="mb-3 pt-2 border-t border-slate-800/50">
-              <span className="text-[9px] font-bold text-slate-500 tracking-widest">CITED SOURCES</span>
+            <div className="mb-3 pt-2 border-t border-[var(--color-border)]">
+              <span className="text-[9px] font-bold text-[var(--color-text-main)] tracking-widest">CITED SOURCES</span>
               <div className="mt-1 space-y-1">
                 {event.sources.slice(0, 3).map((src, i) => (
                   <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
@@ -1760,7 +1820,7 @@ function AgentSection({
 
           {items && items.length > 0 && (
             <div>
-              <h3 className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 mt-2">RELATED NEWS / MEDIA</h3>
+              <h3 className="text-[10px] font-bold text-[var(--color-text-main)] tracking-widest mb-2 mt-2">RELATED NEWS / MEDIA</h3>
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
                 {items.map((item, i) => (
                   <NewsCard key={i} item={item} />
@@ -1770,7 +1830,7 @@ function AgentSection({
           )}
         </div>
       ) : (
-        <div className="py-8 text-center text-slate-500 opacity-60">
+        <div className="py-8 text-center text-[var(--color-text-main)] opacity-60">
           <Radio className="mx-auto animate-pulse mb-2" size={24} />
           <p className="text-xs">{placeholder}</p>
         </div>
@@ -1841,8 +1901,8 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
   const dirColor = (d: string) => d === 'UP' ? 'text-emerald-400' : d === 'DOWN' ? 'text-red-400' : 'text-amber-400';
   const dirBg = (d: string) => d === 'UP' ? 'bg-emerald-500/20 border-emerald-500/40' : d === 'DOWN' ? 'bg-red-500/20 border-red-500/40' : 'bg-amber-500/20 border-amber-500/40';
   const sentimentColor = (s: string) => s === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40' : s === 'BEARISH' ? 'text-red-400 bg-red-500/15 border-red-500/40' : 'text-amber-400 bg-amber-500/15 border-amber-500/40';
-  const severityColor = (s: string) => s === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border-red-500/40' : s === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : s === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-700 text-slate-300 border-slate-600';
-  const actionColor = (a: string) => a === 'BUY' ? 'text-emerald-400 bg-emerald-500/20' : a === 'SELL' ? 'text-red-400 bg-red-500/20' : a === 'HEDGE' ? 'text-indigo-400 bg-indigo-500/20' : 'text-slate-400 bg-slate-700';
+  const severityColor = (s: string) => s === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border-red-500/40' : s === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : s === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-700 text-[var(--color-text-main)] border-slate-600';
+  const actionColor = (a: string) => a === 'BUY' ? 'text-emerald-400 bg-emerald-500/20' : a === 'SELL' ? 'text-red-400 bg-red-500/20' : a === 'HEDGE' ? 'text-indigo-400 bg-indigo-500/20' : 'text-[var(--color-text-main)] bg-slate-700';
 
   // When chainResult is set, auto-focus custom scenario tab (index 0)
   useEffect(() => {
@@ -1868,15 +1928,15 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Zap className="text-amber-400" size={16} />
-          <h2 className="text-sm font-bold text-white">SCENARIO INTELLIGENCE</h2>
+          <h2 className="text-sm font-bold text-[var(--color-text-main)]">SCENARIO INTELLIGENCE</h2>
         </div>
         <div className="flex items-center gap-2">
           {data?.market_sentiment && (
-            <span className="text-[9px] font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+            <span className="text-[9px] font-bold bg-[var(--color-card)] text-[var(--color-text-main)] px-2 py-0.5 rounded border border-[var(--color-border)]">
               {data.market_sentiment}
             </span>
           )}
-          <span className="text-[9px] text-slate-500 flex items-center gap-1">
+          <span className="text-[9px] text-[var(--color-text-main)] flex items-center gap-1">
             <RefreshCw size={8} className={scenarios.length > 0 ? '' : 'animate-spin'} /> AUTO
           </span>
         </div>
@@ -1889,11 +1949,10 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
             <button
               key={i}
               onClick={() => setActiveScenario(i)}
-              className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                i === activeScenario
+              className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${i === activeScenario
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
-                  : 'bg-slate-800/60 text-slate-500 border border-slate-700/50 hover:text-slate-300'
-              }`}
+                  : 'bg-[var(--color-card)] text-[var(--color-text-main)] border border-[var(--color-border)] hover:text-[var(--color-text-main)]'
+                }`}
             >
               {scItem.isCustom ? (
                 <>⭐ CUSTOM</>
@@ -1918,18 +1977,18 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
         {sc ? (
           <div className="space-y-2.5 animate-fade-in" key={activeScenario}>
             {/* Scenario Header */}
-            <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+            <div className="bg-[var(--color-card)] rounded-lg p-3 border border-[var(--color-border)]">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${severityColor(sc.severity)}`}>{sc.severity}</span>
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${sentimentColor(sc.sentiment)}`}>{sc.sentiment}</span>
                 </div>
-                <span className="text-[9px] text-slate-500">
+                <span className="text-[9px] text-[var(--color-text-main)]">
                   {sc.probability} ({sc.probability_pct}%)
                 </span>
               </div>
-              <h3 className="text-[13px] text-white font-bold leading-tight mb-1">{sc.title}</h3>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
+              <h3 className="text-[13px] text-[var(--color-text-main)] font-bold leading-tight mb-1">{sc.title}</h3>
+              <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed">
                 <span className="text-amber-400 font-bold">IF:</span> {sc.trigger}
               </p>
             </div>
@@ -1944,12 +2003,12 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
                   {i < (sc.chain?.length || 0) - 1 && <div className="w-0.5 h-4 bg-slate-700 mt-1"></div>}
                 </div>
                 <div className={`flex-1 p-2 rounded-lg border ${dirBg(step.direction)}`}>
-                  <p className="text-[11px] text-white font-medium mb-0.5">{step.impact}</p>
+                  <p className="text-[11px] text-[var(--color-text-main)] font-medium mb-0.5">{step.impact}</p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[9px] text-slate-300">{step.affected}</span>
+                    <span className="text-[9px] text-[var(--color-text-main)]">{step.affected}</span>
                     <ArrowRight size={8} className="text-slate-600" />
                     <span className={`text-[9px] font-bold ${dirColor(step.direction)}`}>{step.direction} {step.magnitude}</span>
-                    <span className="text-[8px] text-slate-500">· {step.timeframe}</span>
+                    <span className="text-[8px] text-[var(--color-text-main)]">· {step.timeframe}</span>
                   </div>
                 </div>
               </div>
@@ -1973,8 +2032,8 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-slate-300 leading-relaxed">{sc.opportunity.reasoning}</p>
-                <span className="text-[8px] text-slate-500 mt-1 block">Risk: {sc.opportunity.risk}</span>
+                <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed">{sc.opportunity.reasoning}</p>
+                <span className="text-[8px] text-[var(--color-text-main)] mt-1 block">Risk: {sc.opportunity.risk}</span>
               </div>
             )}
 
@@ -1982,12 +2041,12 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
             {sc.hedge && (
               <div className="bg-indigo-950/20 rounded-lg p-2.5 border border-indigo-800/30 flex items-start gap-2">
                 <Shield size={11} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-                <p className="text-[10px] text-slate-300 leading-relaxed">{sc.hedge}</p>
+                <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed">{sc.hedge}</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+          <div className="flex flex-col items-center justify-center py-8 text-[var(--color-text-main)]">
             <Zap className="mb-2 opacity-40 animate-pulse" size={28} />
             <p className="text-[10px] text-center max-w-[200px]">
               Scenario Intelligence engine is synthesizing data from all agents...
@@ -1998,13 +2057,13 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
       </div>
 
       {/* Watchlist + Custom Query */}
-      <div className="border-t border-slate-800 pt-2.5 mt-2">
+      <div className="border-t border-[var(--color-border)] pt-2.5 mt-2">
         {data?.key_watchlist && data.key_watchlist.length > 0 && (
           <div className="mb-2">
-            <span className="text-[8px] font-bold text-slate-500 tracking-widest">WATCHLIST</span>
+            <span className="text-[8px] font-bold text-[var(--color-text-main)] tracking-widest">WATCHLIST</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {data.key_watchlist.map((item: string, i: number) => (
-                <span key={i} className="text-[9px] bg-slate-800/60 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50">
+                <span key={i} className="text-[9px] bg-[var(--color-card)] text-[var(--color-text-main)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">
                   {item}
                 </span>
               ))}
@@ -2015,7 +2074,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
         {/* Toggle custom scenario input */}
         <button
           onClick={() => setShowCustom(!showCustom)}
-          className="text-[9px] text-slate-500 hover:text-amber-400 transition flex items-center gap-1"
+          className="text-[9px] text-[var(--color-text-main)] hover:text-amber-400 transition flex items-center gap-1"
         >
           <Zap size={9} /> {showCustom ? 'Hide' : 'Custom scenario...'}
         </button>
@@ -2028,12 +2087,12 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
               onChange={(e) => setChainInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onPredict()}
               placeholder="e.g. Iran blocks Strait of Hormuz..."
-              className="flex-1 bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-1.5 text-[10px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+              className="flex-1 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-[10px] text-[var(--color-text-main)] placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
             />
             <button
               onClick={onPredict}
               disabled={chainLoading || !chainInput.trim()}
-              className="px-2.5 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-50 rounded-lg text-white text-[9px] font-bold tracking-wider border border-amber-500/50 flex items-center gap-1"
+              className="px-2.5 py-1.5 bg-amber-600/80 hover:bg-amber-600 disabled:opacity-50 rounded-lg text-[var(--color-text-main)] text-[9px] font-bold tracking-wider border border-amber-500/50 flex items-center gap-1"
             >
               {chainLoading ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
               {chainLoading ? '...' : 'PREDICT'}
@@ -2051,7 +2110,7 @@ function ScenarioIntelligence({ data, chainInput, setChainInput, chainLoading, c
 
 function ADXGauge({ adx, diPlus, diMinus }: { adx: number, diPlus: number, diMinus: number }) {
   let strength = "Weak Trend";
-  let strengthColor = "text-slate-400";
+  let strengthColor = "text-[var(--color-text-main)]";
   if (adx >= 25) {
     strength = "Strong Trend";
     strengthColor = "text-sky-400";
@@ -2062,7 +2121,7 @@ function ADXGauge({ adx, diPlus, diMinus }: { adx: number, diPlus: number, diMin
   }
 
   let bias = "Neutral";
-  let biasColor = "text-slate-400";
+  let biasColor = "text-[var(--color-text-main)]";
   if (diPlus > diMinus + 5) {
     bias = "Bullish Bias";
     biasColor = "text-emerald-400";
@@ -2072,40 +2131,40 @@ function ADXGauge({ adx, diPlus, diMinus }: { adx: number, diPlus: number, diMin
   }
 
   return (
-    <div className="bg-slate-950/40 p-4.5 rounded-xl border border-slate-800/80 flex flex-col gap-3">
+    <div className="bg-[var(--color-card)] p-4.5 rounded-xl border border-[var(--color-border)] flex flex-col gap-3">
       <div className="flex justify-between items-center">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+        <span className="text-[10px] font-bold text-[var(--color-text-main)] uppercase tracking-widest flex items-center gap-1.5">
           <Activity size={12} className="text-neonPurple animate-pulse" /> ADX & DMI Trend Strength
         </span>
-        <span className={`text-[8px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-850 uppercase tracking-wider ${biasColor}`}>
+        <span className={`text-[8px] font-bold px-2 py-0.5 rounded bg-[var(--color-card)] border border-[var(--color-border)] uppercase tracking-wider ${biasColor}`}>
           {bias}
         </span>
       </div>
-      
+
       <div className="space-y-3.5 my-1">
         {/* ADX */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-[10px] font-semibold">
-            <span className="text-slate-300">Trend Index (ADX)</span>
-            <span className="text-white font-mono font-bold">{adx.toFixed(1)}</span>
+            <span className="text-[var(--color-text-main)]">Trend Index (ADX)</span>
+            <span className="text-[var(--color-text-main)] font-mono font-bold">{adx.toFixed(1)}</span>
           </div>
-          <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+          <div className="h-2 bg-[var(--color-card)] rounded-full overflow-hidden border border-[var(--color-border)]">
             <div className="h-full bg-gradient-to-r from-indigo-500 to-neonPurple rounded-full" style={{ width: `${Math.min(adx * 1.5, 100)}%` }}></div>
           </div>
           <span className={`text-[8px] block font-mono font-bold uppercase tracking-wider ${strengthColor}`}>{strength}</span>
         </div>
-        
+
         {/* DI+ vs DI- */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-[10px] font-semibold">
             <span className="text-emerald-400">Buyers (DI+)</span>
             <span className="text-rose-400">Sellers (DI-)</span>
           </div>
-          <div className="flex h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+          <div className="flex h-2 bg-[var(--color-card)] rounded-full overflow-hidden border border-[var(--color-border)]">
             <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(diPlus / (diPlus + diMinus || 1)) * 100}%` }}></div>
             <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${(diMinus / (diPlus + diMinus || 1)) * 100}%` }}></div>
           </div>
-          <div className="flex justify-between text-[8px] font-mono text-slate-500">
+          <div className="flex justify-between text-[8px] font-mono text-[var(--color-text-main)]">
             <span>{diPlus.toFixed(1)}</span>
             <span>{diMinus.toFixed(1)}</span>
           </div>
@@ -2117,7 +2176,7 @@ function ADXGauge({ adx, diPlus, diMinus }: { adx: number, diPlus: number, diMin
 
 function RSIGauge({ rsi }: { rsi: number }) {
   let status = "Neutral Momentum";
-  let statusColor = "text-slate-400";
+  let statusColor = "text-[var(--color-text-main)]";
   if (rsi >= 70) {
     status = "Overbought (Consolidation Risk)";
     statusColor = "text-rose-400";
@@ -2126,18 +2185,18 @@ function RSIGauge({ rsi }: { rsi: number }) {
     statusColor = "text-emerald-400";
   }
   return (
-    <div className="bg-slate-950/40 p-4.5 rounded-xl border border-slate-800/80 flex flex-col gap-2.5">
+    <div className="bg-[var(--color-card)] p-4.5 rounded-xl border border-[var(--color-border)] flex flex-col gap-2.5">
       <div className="flex justify-between items-center text-[10px]">
-        <span className="font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+        <span className="font-bold text-[var(--color-text-main)] uppercase tracking-widest flex items-center gap-1.5">
           <TrendingUp size={12} className="text-neonBlue" /> Relative Strength Index (RSI)
         </span>
-        <span className="font-bold text-white font-mono">{rsi.toFixed(1)}</span>
+        <span className="font-bold text-[var(--color-text-main)] font-mono">{rsi.toFixed(1)}</span>
       </div>
-      
-      <div className="relative h-2 bg-slate-900 rounded-full border border-slate-850 my-2">
-        <div className="absolute left-0 top-0 bottom-0 w-[30%] bg-emerald-500/10 border-r border-slate-850"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-[30%] bg-rose-500/10 border-l border-slate-850"></div>
-        <div 
+
+      <div className="relative h-2 bg-[var(--color-card)] rounded-full border border-[var(--color-border)] my-2">
+        <div className="absolute left-0 top-0 bottom-0 w-[30%] bg-emerald-500/10 border-r border-[var(--color-border)]"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-[30%] bg-rose-500/10 border-l border-[var(--color-border)]"></div>
+        <div
           className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-neonBlue border-2 border-white rounded-full shadow-[0_0_10px_#38bdf8] transition-all duration-500"
           style={{ left: `calc(${rsi}% - 7px)` }}
         ></div>
@@ -2151,7 +2210,7 @@ function SafePlot({ component, ...props }: any) {
   const P = component;
   if (!P) {
     return (
-      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-800">
+      <div className="h-[480px] flex flex-col items-center justify-center bg-[var(--color-card)] text-[var(--color-text-main)] rounded-xl border border-[var(--color-border)]">
         <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
         <p className="text-xs font-bold tracking-widest text-neonBlue/80">INITIALIZING DRAWING ENGINE...</p>
         <p className="text-[10px]">Preparing interactive chart canvas</p>
@@ -2165,7 +2224,7 @@ function SafePlot({ component, ...props }: any) {
       <div className="h-[480px] flex flex-col items-center justify-center bg-red-950/20 text-red-400 rounded-xl border border-red-900/30">
         <AlertTriangle size={24} className="mb-2" />
         <p className="text-xs font-bold tracking-widest uppercase">SafeGuard Active</p>
-        <p className="text-[10px] text-slate-400">Rendering error caught. App remains stable.</p>
+        <p className="text-[10px] text-[var(--color-text-main)]">Rendering error caught. App remains stable.</p>
       </div>
     );
   }
@@ -2176,7 +2235,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
   const [loading, setLoading] = useState(false);
   const [yaxisRange, setYaxisRange] = useState<[number, number] | null>(null);
   const [xaxisRange, setXaxisRange] = useState<[any, any] | null>(null);
-  
+
   const plotContainerRef = useRef<HTMLDivElement>(null);
 
   // Reset zoom states when symbol changes
@@ -2210,48 +2269,48 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const className = target.getAttribute ? target.getAttribute('class') || '' : '';
-      
+
       // Target Y-axis drag rectangles (Plotly internally tags them with class containing ydrag)
       if (className.includes('ydrag') || className.includes('y2drag')) {
         e.stopPropagation();
         e.preventDefault();
-        
+
         const gd = el.querySelector('.js-plotly-plot') as any;
         if (!gd || !gd._fullLayout || !gd._fullLayout.yaxis) return;
-        
+
         const initialRange = [...gd._fullLayout.yaxis.range] as [number, number];
         const startY = e.clientY;
-        
+
         const handleMouseMove = (moveEvent: MouseEvent) => {
           moveEvent.stopPropagation();
           moveEvent.preventDefault();
-          
+
           const deltaY = moveEvent.clientY - startY;
-          
+
           // Sensitivity coefficient for smooth stretching/compression
           const sensitivity = 0.005;
           const scaleFactor = Math.exp(deltaY * sensitivity);
-          
+
           const center = (initialRange[0] + initialRange[1]) / 2;
           const originalSpan = initialRange[1] - initialRange[0];
           const newSpan = originalSpan * scaleFactor;
-          
+
           const newRange: [number, number] = [
             center - newSpan / 2,
             center + newSpan / 2
           ];
-          
+
           setYaxisRange(newRange);
         };
-        
+
         const handleMouseUp = (upEvent: MouseEvent) => {
           upEvent.stopPropagation();
           upEvent.preventDefault();
-          
+
           document.removeEventListener('mousemove', handleMouseMove);
           document.removeEventListener('mouseup', handleMouseUp);
         };
-        
+
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
       }
@@ -2260,11 +2319,11 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
     const handleDblClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const className = target.getAttribute ? target.getAttribute('class') || '' : '';
-      
+
       if (className.includes('ydrag') || className.includes('y2drag')) {
         e.stopPropagation();
         e.preventDefault();
-        
+
         // Reset back to automatic scaling
         setYaxisRange(null);
       }
@@ -2286,7 +2345,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
     } else if (eventData['yaxis.range[0]'] !== undefined && eventData['yaxis.range[1]'] !== undefined) {
       setYaxisRange([eventData['yaxis.range[0]'], eventData['yaxis.range[1]']]);
     }
-    
+
     if (eventData['xaxis.autorange'] === true) {
       setXaxisRange(null);
     } else if (eventData['xaxis.range[0]'] !== undefined && eventData['xaxis.range[1]'] !== undefined) {
@@ -2296,7 +2355,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
 
   if (loading) {
     return (
-      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-850">
+      <div className="h-[480px] flex flex-col items-center justify-center bg-[var(--color-card)] text-[var(--color-text-main)] rounded-xl border border-[var(--color-border)]">
         <div className="w-8 h-8 border-2 border-neonBlue/20 border-t-neonBlue rounded-full animate-spin mb-3"></div>
         <p className="text-[10px] font-bold tracking-widest text-neonBlue/80 uppercase">Streaming Market Data...</p>
       </div>
@@ -2305,25 +2364,25 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
 
   if (!candleData || candleData.error) {
     return (
-      <div className="h-[480px] flex flex-col items-center justify-center bg-slate-900/40 text-slate-500 rounded-xl border border-slate-850">
+      <div className="h-[480px] flex flex-col items-center justify-center bg-[var(--color-card)] text-[var(--color-text-main)] rounded-xl border border-[var(--color-border)]">
         <AlertTriangle size={24} className="mb-2 opacity-30 text-amber-500" />
         <p className="text-xs font-bold tracking-widest text-slate-350">DATA UNAVAILABLE</p>
-        <p className="text-[10px] text-slate-500">{candleData?.error || "Could not fetch OHLC data for this symbol."}</p>
+        <p className="text-[10px] text-[var(--color-text-main)]">{candleData?.error || "Could not fetch OHLC data for this symbol."}</p>
       </div>
     );
   }
 
   const getSegmentTraces = (dates: string[], values: number[], directions: any[], name: string, bullColor: string, bearColor: string, isDots = false, extraStyle = {}) => {
     if (!values || !directions || !dates) return [];
-    
+
     const traces: any[] = [];
     let currentSegment: { x: string, y: number }[] = [];
     let currentDir: any = null;
-    
+
     for (let i = 0; i < values.length; i++) {
       const val = values[i];
       const dir = directions[i];
-      
+
       if (val === null || val === undefined) {
         if (currentSegment.length > 0) {
           const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
@@ -2344,7 +2403,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
         currentDir = null;
         continue;
       }
-      
+
       if (currentDir === null) {
         currentDir = dir;
         currentSegment.push({ x: dates[i], y: val });
@@ -2366,12 +2425,12 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
           showlegend: traces.length === 0,
           yaxis: 'y1'
         });
-        
+
         currentDir = dir;
         currentSegment = [{ x: dates[i], y: val }];
       }
     }
-    
+
     if (currentSegment.length > 0) {
       const color = currentDir === 1 || currentDir === true ? bullColor : bearColor;
       traces.push({
@@ -2387,7 +2446,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
         yaxis: 'y1'
       });
     }
-    
+
     return traces;
   };
 
@@ -2446,7 +2505,7 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
   };
 
   const data = [
-    priceTrace, 
+    priceTrace,
     volumeTrace,
     atrBaseline,
     magnetZone,
@@ -2526,11 +2585,11 @@ const ResearchCandleChart = memo(({ symbol, PlotComponent }: { symbol: string, P
 
   return (
     <div ref={plotContainerRef} className="w-full h-full relative">
-      <SafePlot 
-        component={PlotComponent} 
-        data={data} 
-        layout={layout} 
-        config={config} 
+      <SafePlot
+        component={PlotComponent}
+        data={data}
+        layout={layout}
+        config={config}
         className="w-full h-full"
         onRelayout={handleRelayout}
       />
@@ -2663,19 +2722,19 @@ export function StockResearchTabView() {
 
   return (
     <div className="flex flex-col gap-6 text-left select-none">
-      
+
       {/* HEADER BAR */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-[var(--color-text-main)] flex items-center gap-2">
             <Cpu className="text-neonBlue" size={20} /> AUTONOMOUS INVESTMENT RESEARCH ENGINE
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Launches a Playwright-controlled browser agent to analyze stock charts, fundamentals, corporate filings, and news</p>
+          <p className="text-xs text-[var(--color-text-main)] mt-0.5">Launches a Playwright-controlled browser agent to analyze stock charts, fundamentals, corporate filings, and news</p>
         </div>
         {activeSessionId && (
-          <button 
+          <button
             onClick={handleClearSession}
-            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 font-bold border border-slate-800 rounded-lg text-xs tracking-wider transition cursor-pointer"
+            className="px-4 py-1.5 bg-[var(--color-card)] hover:bg-[var(--color-card)] text-[var(--color-text-main)] font-bold border border-[var(--color-border)] rounded-lg text-xs tracking-wider transition cursor-pointer"
           >
             ← LEAVE CURRENT SESSION
           </button>
@@ -2685,16 +2744,16 @@ export function StockResearchTabView() {
       {/* VIEW STATE 1: HOME PAGE (INITIATE & HISTORY) */}
       {!activeSessionId && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* SEARCH CARD */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5">
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5">
                 <Search size={14} className="text-neonBlue" /> Run Live Analysis
               </h3>
-              
+
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Indian Stock Ticker</label>
+                <label className="text-[9px] font-bold text-[var(--color-text-main)] uppercase tracking-widest">Indian Stock Ticker</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -2702,7 +2761,7 @@ export function StockResearchTabView() {
                     value={symbolInput}
                     onChange={(e) => setSymbolInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleInitiate()}
-                    className="flex-1 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono font-bold placeholder-slate-600 focus:outline-none focus:border-neonBlue transition"
+                    className="flex-1 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-text-main)] font-mono font-bold placeholder-slate-600 focus:outline-none focus:border-neonBlue transition"
                   />
                   <button
                     onClick={() => handleInitiate()}
@@ -2716,13 +2775,13 @@ export function StockResearchTabView() {
 
               {/* QUICK SUGGESTIONS */}
               <div className="space-y-2">
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Quick Suggestions</span>
+                <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block">Quick Suggestions</span>
                 <div className="flex gap-1.5 flex-wrap">
                   {['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'SBIN', 'TATAMOTORS'].map((ticker) => (
                     <button
                       key={ticker}
                       onClick={() => handleInitiate(ticker)}
-                      className="text-[9px] font-bold px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded hover:border-neonBlue/45 transition cursor-pointer"
+                      className="text-[9px] font-bold px-2 py-1 bg-[var(--color-card)] hover:bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-text-main)] rounded hover:border-neonBlue/45 transition cursor-pointer"
                     >
                       {ticker}
                     </button>
@@ -2734,53 +2793,52 @@ export function StockResearchTabView() {
 
           {/* RESEARCH HISTORY LIST */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5">
-                <Clock size={14} className="text-slate-400" /> Compiled Dossier Archives
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5">
+                <Clock size={14} className="text-[var(--color-text-main)]" /> Compiled Dossier Archives
               </h3>
 
               {historyLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                <div className="flex flex-col items-center justify-center py-20 text-[var(--color-text-main)]">
                   <RefreshCw className="animate-spin mb-3 text-neonBlue" size={24} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">Syncing dossier history...</span>
                 </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-16 text-slate-500 italic text-xs">
+                <div className="text-center py-16 text-[var(--color-text-main)] italic text-xs">
                   No stock research has been conducted yet. Search a symbol above to trigger the first run!
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-slate-900 bg-slate-950/30 max-h-[350px] overflow-y-auto scrollbar-thin">
+                <div className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] max-h-[350px] overflow-y-auto scrollbar-thin">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-slate-900/60 border-b border-slate-800/85 text-[9px] font-bold tracking-widest text-slate-400 uppercase">
+                      <tr className="bg-[var(--color-card)] border-b border-[var(--color-border)] text-[9px] font-bold tracking-widest text-[var(--color-text-main)] uppercase">
                         <th className="py-2.5 px-4">Symbol</th>
                         <th className="py-2.5 px-4 text-center">Status</th>
                         <th className="py-2.5 px-4">Generated Date</th>
                         <th className="py-2.5 px-4 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-900/60 text-slate-300 font-medium">
+                    <tbody className="divide-y divide-slate-900/60 text-[var(--color-text-main)] font-medium">
                       {history.map((h) => (
-                        <tr key={h.id} className="hover:bg-slate-900/20 transition">
-                          <td className="py-2.5 px-4 font-mono font-bold text-white">{h.symbol}</td>
+                        <tr key={h.id} className="hover:bg-[var(--color-card)] transition">
+                          <td className="py-2.5 px-4 font-mono font-bold text-[var(--color-text-main)]">{h.symbol}</td>
                           <td className="py-2.5 px-4 text-center">
-                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
-                              h.status === 'completed'
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${h.status === 'completed'
                                 ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/30'
                                 : h.status === 'failed'
                                   ? 'bg-rose-950/30 text-rose-400 border-rose-900/30'
                                   : 'bg-indigo-950/30 text-indigo-400 border-indigo-900/30 animate-pulse'
-                            }`}>
+                              }`}>
                               {h.status}
                             </span>
                           </td>
-                          <td className="py-2.5 px-4 text-slate-500 font-mono font-bold">
+                          <td className="py-2.5 px-4 text-[var(--color-text-main)] font-mono font-bold">
                             {new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                           </td>
                           <td className="py-2.5 px-4 text-right">
                             <button
                               onClick={() => handleSelectHistory(h.id)}
-                              className="text-[9px] font-bold px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 rounded hover:border-sky-500/40 transition cursor-pointer"
+                              className="text-[9px] font-bold px-2.5 py-1 bg-[var(--color-card)] hover:bg-[var(--color-card)] border border-[var(--color-border)] text-sky-400 rounded hover:border-sky-500/40 transition cursor-pointer"
                             >
                               OPEN DOSSIER
                             </button>
@@ -2799,30 +2857,30 @@ export function StockResearchTabView() {
       {/* VIEW STATE 2: ACTIVE PIPELINE (RUNNING / PENDING TERMINAL LOGS) */}
       {activeSessionId && (activeSession?.status === 'pending' || activeSession?.status === 'running') && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in zoom-in duration-300">
-          
+
           {/* TERMINAL CONSOLE PANEL */}
           <div className="lg:col-span-3 flex flex-col">
-            <div className="flex-1 bg-slate-950 border border-slate-900 rounded-xl overflow-hidden flex flex-col min-h-[480px] shadow-2xl">
+            <div className="flex-1 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden flex flex-col min-h-[480px] shadow-2xl">
               {/* Terminal Title Bar */}
-              <div className="bg-slate-900 px-4 py-2 border-b border-slate-900 flex items-center justify-between">
+              <div className="bg-[var(--color-card)] px-4 py-2 border-b border-[var(--color-border)] flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
                 </div>
-                <span className="text-[10px] text-slate-500 font-mono font-bold select-none">autonomous_analyst_agent.sh</span>
+                <span className="text-[10px] text-[var(--color-text-main)] font-mono font-bold select-none">autonomous_analyst_agent.sh</span>
                 <div className="w-12"></div>
               </div>
-              
+
               {/* Terminal Logs Stream */}
-              <div className="flex-1 p-5 font-mono text-[11px] leading-relaxed overflow-y-auto max-h-[420px] scrollbar-thin text-slate-400 space-y-1">
+              <div className="flex-1 p-5 font-mono text-[11px] leading-relaxed overflow-y-auto max-h-[420px] scrollbar-thin text-[var(--color-text-main)] space-y-1">
                 {activeSession.logs && activeSession.logs.map((log: string, idx: number) => {
                   let colorClass = "text-slate-450";
                   if (log.includes("[ERROR]") || log.includes("Failed")) colorClass = "text-rose-400 font-bold";
                   else if (log.includes("[INIT]")) colorClass = "text-indigo-400";
                   else if (log.includes("[COMPUTE]")) colorClass = "text-neonPurple";
                   else if (log.includes("complete") || log.includes("successfully")) colorClass = "text-emerald-400";
-                  
+
                   return (
                     <div key={idx} className={colorClass}>
                       <span className="text-slate-600 select-none mr-2">$</span> {log}
@@ -2843,15 +2901,15 @@ export function StockResearchTabView() {
 
           {/* ACTIVE STATUS & SCREENSHOT PREVIEW PANEL */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex-1 flex flex-col justify-between min-h-[480px]">
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex-1 flex flex-col justify-between min-h-[480px]">
               <div className="space-y-5">
                 <div>
-                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Target Stock</span>
-                  <h3 className="text-2xl font-black text-white font-mono mt-0.5 tracking-wider">{activeSession.symbol}</h3>
+                  <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block">Target Stock</span>
+                  <h3 className="text-2xl font-black text-[var(--color-text-main)] font-mono mt-0.5 tracking-wider">{activeSession.symbol}</h3>
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Agent Execution Status</span>
+                  <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block">Agent Execution Status</span>
                   <div className="flex items-center gap-2">
                     <div className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -2864,11 +2922,11 @@ export function StockResearchTabView() {
                 {/* Live chart screenshot preview */}
                 {activeSession.screenshots && activeSession.screenshots.length > 0 && (
                   <div className="space-y-2">
-                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Captured Viewport</span>
-                    <div className="rounded-lg overflow-hidden border border-slate-900 bg-slate-950/60 shadow-lg">
-                      <img 
-                        src={activeSession.screenshots[0]} 
-                        alt="TradingView Candlestick capture" 
+                    <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block">Captured Viewport</span>
+                    <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-card)] shadow-lg">
+                      <img
+                        src={activeSession.screenshots[0]}
+                        alt="TradingView Candlestick capture"
                         className="w-full h-auto object-cover max-h-[160px] opacity-80 hover:opacity-100 transition duration-300"
                       />
                     </div>
@@ -2876,7 +2934,7 @@ export function StockResearchTabView() {
                 )}
               </div>
 
-              <div className="pt-6 border-t border-slate-900 text-center">
+              <div className="pt-6 border-t border-[var(--color-border)] text-center">
                 <span className="text-[9px] text-slate-600 italic leading-relaxed block max-w-[200px] mx-auto">This run runs completely autonomously. Do not refresh this page to preserve logs.</span>
               </div>
             </div>
@@ -2887,62 +2945,61 @@ export function StockResearchTabView() {
       {/* VIEW STATE 3: COMPLETED DOSSIER REPORT */}
       {activeSessionId && activeSession?.status === 'completed' && activeSession.report && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom duration-500 select-none">
-          
+
           {/* PROFILE SUMMARY BAR (Full Width) */}
-          <div className="lg:col-span-3 glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+          <div className="lg:col-span-3 glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
             <div className="space-y-1 flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black text-white">{activeSession.report.company_name}</h3>
-                <span className="text-[9px] font-bold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono tracking-wider">{activeSession.symbol}</span>
+                <h3 className="text-lg font-black text-[var(--color-text-main)]">{activeSession.report.company_name}</h3>
+                <span className="text-[9px] font-bold bg-[var(--color-card)] border border-[var(--color-border)] px-2 py-0.5 rounded text-[var(--color-text-main)] font-mono tracking-wider">{activeSession.symbol}</span>
                 <span className="text-[9px] font-bold bg-sky-950/40 border border-sky-900/30 px-2 py-0.5 rounded text-sky-400 uppercase tracking-wider">{activeSession.report.sector}</span>
               </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed font-mono mt-2 max-w-4xl">{activeSession.report.summary}</p>
+              <p className="text-[10px] text-[var(--color-text-main)] leading-relaxed font-mono mt-2 max-w-4xl">{activeSession.report.summary}</p>
             </div>
-            
+
             {/* RATINGS BADGE */}
-            <div className="flex-shrink-0 flex items-center gap-4 bg-slate-950/80 p-4.5 rounded-xl border border-slate-900">
+            <div className="flex-shrink-0 flex items-center gap-4 bg-[var(--color-card)] p-4.5 rounded-xl border border-[var(--color-border)]">
               <div>
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">AI Recommendation</span>
-                <span className={`text-xl font-black block text-right ${
-                  activeSession.report.thesis?.rating === 'Buy' 
-                    ? 'text-emerald-400' 
-                    : activeSession.report.thesis?.rating === 'Sell' 
-                      ? 'text-rose-450' 
+                <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block text-right">AI Recommendation</span>
+                <span className={`text-xl font-black block text-right ${activeSession.report.thesis?.rating === 'Buy'
+                    ? 'text-emerald-400'
+                    : activeSession.report.thesis?.rating === 'Sell'
+                      ? 'text-rose-450'
                       : 'text-amber-400'
-                }`}>
+                  }`}>
                   {activeSession.report.thesis?.rating?.toUpperCase() || 'HOLD'}
                 </span>
               </div>
-              
+
               {activeSession.report.current_price && (
                 <>
-                  <div className="h-8 w-[1px] bg-slate-900"></div>
+                  <div className="h-8 w-[1px] bg-[var(--color-card)]"></div>
                   <div>
-                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">Current Price</span>
-                    <span className="text-sm font-extrabold text-white font-mono block text-right">
+                    <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block text-right">Current Price</span>
+                    <span className="text-sm font-extrabold text-[var(--color-text-main)] font-mono block text-right">
                       ₹{activeSession.report.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </>
               )}
-              
-              <div className="h-8 w-[1px] bg-slate-900"></div>
+
+              <div className="h-8 w-[1px] bg-[var(--color-card)]"></div>
               <div>
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block text-right">Target Range</span>
-                <span className="text-sm font-extrabold text-white font-mono block text-right">{activeSession.report.thesis?.target_range || '₹0.00'}</span>
+                <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block text-right">Target Range</span>
+                <span className="text-sm font-extrabold text-[var(--color-text-main)] font-mono block text-right">{activeSession.report.thesis?.target_range || '₹0.00'}</span>
               </div>
             </div>
           </div>
 
           {/* LEFT COLUMN: FUNDAMENTALS & TECHNICAL INDICATORS */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-            
+
             {/* FUNDAMENTALS CARD */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
-                <Newspaper size={14} className="text-slate-400" /> Fundamental Ratios
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
+                <Newspaper size={14} className="text-[var(--color-text-main)]" /> Fundamental Ratios
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 {[
                   { label: "Market Cap", value: formatMarketCap(activeSession.report.ratios?.market_cap) },
@@ -2952,54 +3009,54 @@ export function StockResearchTabView() {
                   { label: "Dividend Yield", value: activeSession.report.ratios?.dividend_yield ? `${(activeSession.report.ratios.dividend_yield * 100).toFixed(2)}%` : 'N/A' },
                   { label: "Profit Margin", value: activeSession.report.ratios?.margin ? `${(activeSession.report.ratios.margin * 100).toFixed(2)}%` : 'N/A' }
                 ].map((item, idx) => (
-                  <div key={idx} className="bg-slate-950/30 p-2.5 rounded border border-slate-900 flex flex-col">
-                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</span>
-                    <span className="text-xs font-extrabold text-white mt-1 font-mono">{item.value}</span>
+                  <div key={idx} className="bg-[var(--color-card)] p-2.5 rounded border border-[var(--color-border)] flex flex-col">
+                    <span className="text-[8px] font-bold text-[var(--color-text-main)] uppercase tracking-widest">{item.label}</span>
+                    <span className="text-xs font-extrabold text-[var(--color-text-main)] mt-1 font-mono">{item.value}</span>
                   </div>
                 ))}
               </div>
-              
+
               {/* Sources Metadata */}
-              <div className="mt-2 pt-2 border-t border-slate-900/60 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+              <div className="mt-2 pt-2 border-t border-[var(--color-border)] flex items-center justify-between text-[9px] text-[var(--color-text-main)] font-mono">
                 <span>DATA SOURCE: {activeSession.report.data_source || 'Yahoo Finance Live API'}</span>
                 <span>STATUS: VERIFIED</span>
               </div>
             </div>
 
             {/* TECHNICAL DIALS */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
                 <Activity size={14} className="text-neonPurple" /> Technical Momentum
               </h3>
-              
-              <ADXGauge 
-                adx={activeSession.report.technicals?.adx || 20} 
-                diPlus={activeSession.report.technicals?.di_plus || 20} 
-                diMinus={activeSession.report.technicals?.di_minus || 20} 
+
+              <ADXGauge
+                adx={activeSession.report.technicals?.adx || 20}
+                diPlus={activeSession.report.technicals?.di_plus || 20}
+                diMinus={activeSession.report.technicals?.di_minus || 20}
               />
-              
+
               <RSIGauge rsi={activeSession.report.technicals?.rsi || 50} />
             </div>
           </div>
 
           {/* MIDDLE COLUMN: CHART SCREENSHOT & GEMINI VISION ANALYSIS */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-            
+
             {/* CHART ANALYSIS */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
-                <Globe size={14} className="text-sky-400 animate-pulse" /> Candlestick Trendline Analysis (Gemini Vision)
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
+                <Globe size={14} className="text-sky-400 animate-pulse" /> Candlestick Trendline Analysis (Neural Technical AI)
               </h3>
-              
-              <div className="rounded-xl overflow-hidden border border-slate-900 bg-slate-950/60 shadow-inner h-[480px]">
-                <ResearchCandleChart 
-                  symbol={activeSession.symbol} 
-                  PlotComponent={PlotComponent} 
+
+              <div className="rounded-xl overflow-hidden border border-[var(--color-border)] bg-[var(--color-card)] shadow-inner h-[480px]">
+                <ResearchCandleChart
+                  symbol={activeSession.symbol}
+                  PlotComponent={PlotComponent}
                 />
               </div>
-              
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-900 text-left max-h-[220px] overflow-y-auto scrollbar-thin">
-                <h4 className="text-[9px] font-bold text-slate-500 tracking-widest uppercase mb-1.5">GEMINI VISION REPORT</h4>
+
+              <div className="bg-[var(--color-card)] p-4 rounded-xl border border-[var(--color-border)] text-left max-h-[220px] overflow-y-auto scrollbar-thin">
+                <h4 className="text-[9px] font-bold text-[var(--color-text-main)] tracking-widest uppercase mb-1.5">NEURAL TECHNICAL REPORT</h4>
                 <p className="text-[10px] text-slate-350 leading-relaxed font-mono whitespace-pre-line">
                   {activeSession.report.chart_analysis || "No visual chart report was compiled."}
                 </p>
@@ -3009,68 +3066,66 @@ export function StockResearchTabView() {
 
           {/* BOTTOM ROW: INSIDER ACTIVITY, NEWS SENTIMENT & CORE THESIS */}
           <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            
+
             {/* INSIDER MONITOR CARD */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
                 <Shield size={14} className="text-orange-400" /> Promoters & Insiders holding
               </h3>
-              
+
               <div className="flex-1 flex flex-col justify-between gap-3">
-                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Promoter Holdings Trend</span>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${
-                    activeSession.report.insider_activity?.promoter_activity === 'Increase'
+                <div className="bg-[var(--color-card)] p-3 rounded-lg border border-[var(--color-border)] flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-[var(--color-text-main)] uppercase tracking-wider">Promoter Holdings Trend</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${activeSession.report.insider_activity?.promoter_activity === 'Increase'
                       ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
                       : activeSession.report.insider_activity?.promoter_activity === 'Decrease'
                         ? 'bg-rose-950/40 text-rose-450 border-rose-900/30'
-                        : 'bg-slate-900 text-slate-400 border-slate-800'
-                  }`}>
+                        : 'bg-[var(--color-card)] text-[var(--color-text-main)] border-[var(--color-border)]'
+                    }`}>
                     {activeSession.report.insider_activity?.promoter_activity || 'STABLE'}
                   </span>
                 </div>
-                
-                <p className="text-[10px] text-slate-400 font-mono leading-relaxed bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1">
+
+                <p className="text-[10px] text-[var(--color-text-main)] font-mono leading-relaxed bg-[var(--color-card)] p-3.5 rounded border border-[var(--color-border)] flex-1">
                   {activeSession.report.insider_activity?.summary || "No recent promoter stake activities detected."}
                 </p>
               </div>
             </div>
 
             {/* NEWS SENTIMENT CARD */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
-                <Newspaper size={14} className="text-slate-400" /> News Sentiment & Risk
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
+                <Newspaper size={14} className="text-[var(--color-text-main)]" /> News Sentiment & Risk
               </h3>
-              
+
               <div className="flex-1 flex flex-col justify-between gap-3">
-                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Media Sentiment Check</span>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${
-                    activeSession.report.news_sentiment?.sentiment === 'Bullish'
+                <div className="bg-[var(--color-card)] p-3 rounded-lg border border-[var(--color-border)] flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-[var(--color-text-main)] uppercase tracking-wider">Media Sentiment Check</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${activeSession.report.news_sentiment?.sentiment === 'Bullish'
                       ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
                       : activeSession.report.news_sentiment?.sentiment === 'Bearish'
                         ? 'bg-rose-950/40 text-rose-450 border-rose-900/30'
-                        : 'bg-slate-900 text-slate-400 border-slate-800'
-                  }`}>
+                        : 'bg-[var(--color-card)] text-[var(--color-text-main)] border-[var(--color-border)]'
+                    }`}>
                     {activeSession.report.news_sentiment?.sentiment || 'NEUTRAL'}
                   </span>
                 </div>
-                
-                <div className="bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1 space-y-2 flex flex-col justify-between">
+
+                <div className="bg-[var(--color-card)] p-3.5 rounded border border-[var(--color-border)] flex-1 space-y-2 flex flex-col justify-between">
                   <div>
                     <span className="text-[8px] font-bold text-rose-400 uppercase tracking-widest block mb-0.5">Primary Risk Factor</span>
-                    <p className="text-[10px] text-slate-300 font-mono leading-relaxed">{activeSession.report.news_sentiment?.risk_factor || "N/A"}</p>
+                    <p className="text-[10px] text-[var(--color-text-main)] font-mono leading-relaxed">{activeSession.report.news_sentiment?.risk_factor || "N/A"}</p>
                   </div>
-                  
+
                   {activeSession.report.news_sentiment?.articles && activeSession.report.news_sentiment.articles.length > 0 && (
-                    <div className="border-t border-slate-900 pt-2 space-y-1 max-h-[80px] overflow-y-auto scrollbar-thin">
-                      <span className="text-[7.5px] font-bold text-slate-500 uppercase tracking-widest block">Reference Articles</span>
+                    <div className="border-t border-[var(--color-border)] pt-2 space-y-1 max-h-[80px] overflow-y-auto scrollbar-thin">
+                      <span className="text-[7.5px] font-bold text-[var(--color-text-main)] uppercase tracking-widest block">Reference Articles</span>
                       {activeSession.report.news_sentiment.articles.slice(0, 3).map((art: any, artIdx: number) => (
-                        <a 
-                          key={artIdx} 
-                          href={art.url} 
-                          target="_blank" 
-                          rel="noreferrer" 
+                        <a
+                          key={artIdx}
+                          href={art.url}
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-[9px] text-sky-400 hover:underline hover:text-sky-350 block truncate font-mono"
                         >
                           🔗 {art.title}
@@ -3083,37 +3138,37 @@ export function StockResearchTabView() {
             </div>
 
             {/* TRADINGVIEW IDEAS CARD */}
-            <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+            <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
                 <TrendingUp size={14} className="text-sky-400 animate-pulse" /> TradingView Analysis Ideas
               </h3>
-              
+
               <div className="flex-1 flex flex-col justify-between gap-3">
-                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Public Discussions</span>
+                <div className="bg-[var(--color-card)] p-3 rounded-lg border border-[var(--color-border)] flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-[var(--color-text-main)] uppercase tracking-wider">Public Discussions</span>
                   <span className="text-[10px] font-black px-2 py-0.5 rounded border border-sky-900/30 bg-sky-950/20 text-sky-400 uppercase tracking-widest font-mono">
                     {activeSession.report.tradingview_ideas?.length || 0} IDEAS
                   </span>
                 </div>
-                
-                <div className="bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1 flex flex-col justify-between gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
+
+                <div className="bg-[var(--color-card)] p-3.5 rounded border border-[var(--color-border)] flex-1 flex flex-col justify-between gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
                   {!activeSession.report.tradingview_ideas || activeSession.report.tradingview_ideas.length === 0 ? (
-                    <p className="text-[10px] text-slate-500 font-mono italic">No recent TradingView technical analysis ideas found.</p>
+                    <p className="text-[10px] text-[var(--color-text-main)] font-mono italic">No recent TradingView technical analysis ideas found.</p>
                   ) : (
                     <div className="space-y-2">
                       {activeSession.report.tradingview_ideas.slice(0, 4).map((idea: any, idx: number) => (
-                        <div key={idx} className="border-b border-slate-900/60 pb-1.5 last:border-b-0 last:pb-0">
-                          <a 
-                            href={idea.url} 
-                            target="_blank" 
-                            rel="noreferrer" 
+                        <div key={idx} className="border-b border-[var(--color-border)] pb-1.5 last:border-b-0 last:pb-0">
+                          <a
+                            href={idea.url}
+                            target="_blank"
+                            rel="noreferrer"
                             className="text-[9px] text-sky-400 hover:underline hover:text-sky-350 font-mono flex items-start gap-1 leading-snug"
                           >
                             <span className="mt-0.5">🔗</span>
                             <span className="truncate block">{idea.title}</span>
                           </a>
                           {idea.pub_date && (
-                            <span className="text-[7.5px] text-slate-500 font-mono block ml-3 mt-0.5">{idea.pub_date}</span>
+                            <span className="text-[7.5px] text-[var(--color-text-main)] font-mono block ml-3 mt-0.5">{idea.pub_date}</span>
                           )}
                         </div>
                       ))}
@@ -3125,74 +3180,73 @@ export function StockResearchTabView() {
 
             {/* ULTIMATE INVESTMENT THESIS */}
             <div className="glass-panel p-5 border border-indigo-900/60 bg-gradient-to-br from-slate-950/80 to-indigo-950/15 flex flex-col gap-4 shadow-xl">
-              <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-indigo-950/80 pb-2">
+              <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-indigo-950/80 pb-2">
                 <Lightbulb size={14} className="text-indigo-400 animate-pulse" /> investment Thesis Summary
               </h3>
-              
+
               <div className="flex-1 flex flex-col justify-between gap-3">
                 <p className="text-[10.5px] text-indigo-200 font-mono leading-relaxed bg-indigo-950/20 p-4 rounded-xl border border-indigo-900/40 flex-1">
                   {activeSession.report.thesis?.thesis || "No thesis generated."}
                 </p>
-                
+
                 <div className="flex items-center gap-2 mt-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                  <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Analysis Audited by Artillegence AI</span>
+                  <span className="text-[8px] text-[var(--color-text-main)] font-bold uppercase tracking-wider">Analysis Audited by Artillegence AI</span>
                 </div>
               </div>
             </div>
 
             {/* NEW ROW: SOCIAL SENTIMENT & DEBATE LOG */}
             <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* SOCIAL SENTIMENT CARD */}
-              <div className="glass-panel p-5 border border-slate-800/80 bg-slate-950/40 flex flex-col gap-4">
-                <h3 className="text-xs font-bold text-slate-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-slate-900 pb-2">
+              <div className="glass-panel p-5 border border-[var(--color-border)] bg-[var(--color-card)] flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-[var(--color-text-main)] tracking-widest uppercase flex items-center gap-1.5 border-b border-[var(--color-border)] pb-2">
                   <Users size={14} className="text-pink-400 animate-pulse" /> Retail Social Sentiment
                 </h3>
-                
+
                 <div className="flex-1 flex flex-col justify-between gap-3">
-                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-900 flex items-center justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Reddit / StockTwits Mood</span>
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${
-                      activeSession.report.social_sentiment?.retail_mood === 'Bullish' || activeSession.report.social_sentiment?.retail_mood === 'FOMO'
+                  <div className="bg-[var(--color-card)] p-3 rounded-lg border border-[var(--color-border)] flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-[var(--color-text-main)] uppercase tracking-wider">Reddit / StockTwits Mood</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${activeSession.report.social_sentiment?.retail_mood === 'Bullish' || activeSession.report.social_sentiment?.retail_mood === 'FOMO'
                         ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
                         : activeSession.report.social_sentiment?.retail_mood === 'Bearish' || activeSession.report.social_sentiment?.retail_mood === 'Fear'
                           ? 'bg-rose-950/40 text-rose-450 border-rose-900/30'
-                          : 'bg-slate-900 text-slate-400 border-slate-800'
-                    }`}>
+                          : 'bg-[var(--color-card)] text-[var(--color-text-main)] border-[var(--color-border)]'
+                      }`}>
                       {activeSession.report.social_sentiment?.retail_mood || 'NEUTRAL'}
                     </span>
                   </div>
-                  
+
                   <div className="flex gap-4 items-center">
-                    <div className="flex-1 h-2 bg-slate-900 rounded-full overflow-hidden flex">
-                      <div 
-                        className="h-full bg-emerald-500" 
+                    <div className="flex-1 h-2 bg-[var(--color-card)] rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-emerald-500"
                         style={{ width: `${(activeSession.report.social_sentiment?.bull_count || 50) / ((activeSession.report.social_sentiment?.bull_count || 50) + (activeSession.report.social_sentiment?.bear_count || 50)) * 100}%` }}
                       ></div>
-                      <div 
+                      <div
                         className="h-full bg-rose-500"
                         style={{ width: `${(activeSession.report.social_sentiment?.bear_count || 50) / ((activeSession.report.social_sentiment?.bull_count || 50) + (activeSession.report.social_sentiment?.bear_count || 50)) * 100}%` }}
                       ></div>
                     </div>
-                    <div className="text-[9px] font-mono font-bold text-slate-400 flex gap-2">
+                    <div className="text-[9px] font-mono font-bold text-[var(--color-text-main)] flex gap-2">
                       <span className="text-emerald-400">{activeSession.report.social_sentiment?.bull_count || 0} Bulls</span>
                       <span className="text-rose-400">{activeSession.report.social_sentiment?.bear_count || 0} Bears</span>
                     </div>
                   </div>
 
-                  <p className="text-[10px] text-slate-400 font-mono leading-relaxed bg-slate-950/30 p-3.5 rounded border border-slate-900/60 flex-1 mt-2">
+                  <p className="text-[10px] text-[var(--color-text-main)] font-mono leading-relaxed bg-[var(--color-card)] p-3.5 rounded border border-[var(--color-border)] flex-1 mt-2">
                     {activeSession.report.social_sentiment?.summary || "No retail sentiment generated."}
                   </p>
                 </div>
               </div>
 
               {/* BULLISH VS BEARISH DEBATE LOG */}
-              <div className="glass-panel p-5 border border-amber-900/40 bg-slate-950/40 flex flex-col gap-4 shadow-lg">
+              <div className="glass-panel p-5 border border-amber-900/40 bg-[var(--color-card)] flex flex-col gap-4 shadow-lg">
                 <h3 className="text-xs font-bold text-amber-300 tracking-widest uppercase flex items-center gap-1.5 border-b border-amber-900/40 pb-2">
                   <MessageSquare size={14} className="text-amber-400" /> Researcher Debate Log
                 </h3>
-                
+
                 <div className="flex-1 flex flex-col gap-3 max-h-[220px] overflow-y-auto scrollbar-thin pr-1">
                   {activeSession.report.debate_log && activeSession.report.debate_log.map((msg: any, idx: number) => {
                     const isBull = msg.agent === 'Bullish Researcher';
@@ -3201,11 +3255,10 @@ export function StockResearchTabView() {
                         <span className={`text-[8px] font-bold uppercase tracking-wider ${isBull ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {msg.agent}
                         </span>
-                        <div className={`p-2.5 rounded-lg border text-[9.5px] font-mono leading-relaxed max-w-[85%] ${
-                          isBull 
-                            ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-100 rounded-tl-none' 
+                        <div className={`p-2.5 rounded-lg border text-[9.5px] font-mono leading-relaxed max-w-[85%] ${isBull
+                            ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-100 rounded-tl-none'
                             : 'bg-rose-950/20 border-rose-900/30 text-rose-100 rounded-tr-none'
-                        }`}>
+                          }`}>
                           {msg.message}
                         </div>
                       </div>
@@ -3240,9 +3293,9 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
       const symbol = String(ev.symbol || '').toLowerCase();
       const company = String(ev.company || '').toLowerCase();
       const details = String(ev.details || '').toLowerCase();
-      const matchesSearch = symbol.includes(searchTerm.toLowerCase()) || 
-                            company.includes(searchTerm.toLowerCase()) ||
-                            details.includes(searchTerm.toLowerCase());
+      const matchesSearch = symbol.includes(searchTerm.toLowerCase()) ||
+        company.includes(searchTerm.toLowerCase()) ||
+        details.includes(searchTerm.toLowerCase());
 
       if (!matchesSearch) return false;
 
@@ -3303,7 +3356,7 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
       case 'Fund Raising':
         return 'bg-teal-950/60 border-teal-800 text-teal-400';
       case 'Board Meeting':
-        return 'bg-slate-900 border-slate-700 text-slate-300';
+        return 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-text-main)]';
       default:
         return 'bg-amber-950/60 border-amber-800 text-amber-400';
     }
@@ -3319,30 +3372,30 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
       case 'Financial Results':
         return <TrendingUp size={13} className="text-sky-400" />;
       default:
-        return <Activity size={13} className="text-slate-400" />;
+        return <Activity size={13} className="text-[var(--color-text-main)]" />;
     }
   };
 
   return (
-    <div className="glass-panel p-6 animate-fade-in text-left border border-slate-800/80 bg-slate-950/40 shadow-xl rounded-xl">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-800/60">
+    <div className="glass-panel p-6 animate-fade-in text-left border border-[var(--color-border)] bg-[var(--color-card)] shadow-xl rounded-xl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-[var(--color-border)]">
         <div>
-          <div className="flex items-center gap-2 text-sky-400 mb-1">
-            <Calendar size={18} className="animate-pulse" />
-            <h2 className="text-base font-black tracking-widest uppercase text-white">NSE Corporate & Economic Calendar</h2>
+          <div className="flex items-center gap-2.5 text-sky-400 mb-1">
+            <Calendar size={22} className="animate-pulse" />
+            <h2 className="text-lg md:text-xl font-black tracking-widest uppercase text-[var(--color-text-main)]">NSE Corporate & Economic Calendar</h2>
           </div>
-          <p className="text-[10px] text-slate-500 font-medium">Verified corporate actions, financial results, dividends, and splits scheduled for Indian equities.</p>
+          <p className="text-xs md:text-sm text-[var(--color-text-main)] font-medium mt-0.5">Verified corporate actions, financial results, dividends, and splits scheduled for Indian equities.</p>
         </div>
-        
+
         {/* Statistics or Status */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded px-3 py-1.5 flex items-center gap-4 text-[9px] font-bold text-slate-400">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-3.5 py-2 flex items-center gap-4 text-xs md:text-sm font-bold text-[var(--color-text-main)]">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>{filteredEvents.length} UPCOMING EVENTS</span>
           </div>
           {loading && (
-            <div className="flex items-center gap-1">
-              <RefreshCw size={10} className="animate-spin text-sky-400" />
+            <div className="flex items-center gap-1.5">
+              <RefreshCw size={12} className="animate-spin text-sky-400" />
               <span className="text-sky-400">SYNCING NSE...</span>
             </div>
           )}
@@ -3350,42 +3403,48 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
       </div>
 
       {/* Filters & Search Row */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 mb-6">
         <div className="md:col-span-4 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" size={14} />
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-[var(--color-text-main)]" size={16} />
           <input
             type="text"
             placeholder="Search symbol, company, or purpose..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900/60 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50 transition-colors"
+            className="w-full bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg pl-10 pr-4 py-2.5 text-xs md:text-sm text-[var(--color-text-main)] placeholder-slate-500 focus:outline-none focus:border-sky-500/50 transition-colors"
           />
         </div>
 
         {/* Event Type Filter */}
-        <div className="md:col-span-4 flex items-center gap-2">
-          <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase whitespace-nowrap">Event Type:</span>
-          <div className="flex-1 flex gap-1 bg-slate-900/40 p-1 rounded-lg border border-slate-800/60">
-            {['All', 'Dividends', 'Splits', 'Earnings', 'Board Meetings'].map(t => (
+        <div className="md:col-span-5 flex items-center gap-2">
+          <span className="text-xs md:text-sm font-black text-[var(--color-text-main)] tracking-wider uppercase whitespace-nowrap">Event Type:</span>
+          <div className="flex-1 flex gap-1 bg-[var(--color-card)] p-1 rounded-lg border border-[var(--color-border)]">
+            {[
+              { id: 'All', label: 'All' },
+              { id: 'Dividends', label: 'Dividends' },
+              { id: 'Splits', label: 'Splits' },
+              { id: 'Earnings', label: 'Earnings' },
+              { id: 'Board Meetings', label: 'Board' }
+            ].map(t => (
               <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
-                className={`flex-1 text-[9px] font-bold py-1 px-1.5 rounded transition-all truncate text-center ${
-                  typeFilter === t
+                key={t.id}
+                onClick={() => setTypeFilter(t.id)}
+                title={t.id}
+                className={`flex-1 text-xs md:text-sm font-bold py-1.5 px-1.5 rounded-md transition-all truncate text-center ${typeFilter === t.id
                     ? 'bg-sky-600/25 text-sky-400 border border-sky-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                    : 'text-[var(--color-text-main)] hover:text-slate-200'
+                  }`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
           </div>
         </div>
 
         {/* Date Filter */}
-        <div className="md:col-span-4 flex items-center gap-2">
-          <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase whitespace-nowrap">Timeframe:</span>
-          <div className="flex-1 flex gap-1 bg-slate-900/40 p-1 rounded-lg border border-slate-800/60">
+        <div className="md:col-span-3 flex items-center gap-2">
+          <span className="text-xs md:text-sm font-black text-[var(--color-text-main)] tracking-wider uppercase whitespace-nowrap">Timeframe:</span>
+          <div className="flex-1 flex gap-1 bg-[var(--color-card)] p-1 rounded-lg border border-[var(--color-border)]">
             {[
               { id: 'all', label: 'ALL' },
               { id: 'today', label: 'TODAY' },
@@ -3395,11 +3454,10 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
               <button
                 key={tf.id}
                 onClick={() => setTimeFilter(tf.id as any)}
-                className={`flex-1 text-[9px] font-bold py-1 px-1.5 rounded transition-all text-center ${
-                  timeFilter === tf.id
+                className={`flex-1 text-xs md:text-sm font-bold py-1.5 px-2 rounded-md transition-all text-center ${timeFilter === tf.id
                     ? 'bg-sky-600/25 text-sky-400 border border-sky-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                    : 'text-[var(--color-text-main)] hover:text-slate-200'
+                  }`}
               >
                 {tf.label}
               </button>
@@ -3410,78 +3468,81 @@ export function EconomicCalendarView({ events, loading }: { events: any[]; loadi
 
       {/* Events Display */}
       {loading && filteredEvents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-slate-900/10 rounded-xl border border-slate-900/60">
+        <div className="flex flex-col items-center justify-center py-20 bg-[var(--color-card)] rounded-xl border border-[var(--color-border)]">
           <div className="animate-spin w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full mb-4"></div>
-          <span className="text-xs text-sky-400 font-bold tracking-widest animate-pulse">LOADING REAL-TIME NSE CALENDAR...</span>
+          <span className="text-sm md:text-base text-sky-400 font-bold tracking-widest animate-pulse">LOADING REAL-TIME NSE CALENDAR...</span>
         </div>
       ) : filteredEvents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-slate-900/10 rounded-xl border border-slate-900/60 text-center text-slate-500">
+        <div className="flex flex-col items-center justify-center py-20 bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] text-center text-[var(--color-text-main)]">
           <AlertTriangle className="text-slate-600 mb-3" size={32} />
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">No scheduled events found</h3>
-          <p className="text-[10px] text-slate-500 mt-1 max-w-[280px]">Try adjusting your search terms or expanding the date range filter.</p>
+          <h3 className="text-sm md:text-base font-bold text-[var(--color-text-main)] uppercase tracking-widest">No scheduled events found</h3>
+          <p className="text-xs md:text-sm text-[var(--color-text-main)] mt-1 max-w-[320px]">Try adjusting your search terms or expanding the date range filter.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/20 max-h-[500px] overflow-y-auto scrollbar-thin">
+        <div className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] max-h-[560px] overflow-y-auto scrollbar-thin">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] font-black tracking-widest text-slate-400 uppercase font-bold">
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Symbol</th>
-                <th className="py-3 px-4">Company</th>
-                <th className="py-3 px-4 text-center">Type</th>
-                <th className="py-3 px-4">Details</th>
+              <tr className="bg-[var(--color-card)] border-b border-[var(--color-border)] text-xs md:text-sm font-black tracking-wider text-[var(--color-text-main)] uppercase font-bold">
+                <th className="py-3.5 px-4">Date</th>
+                <th className="py-3.5 px-4">Symbol</th>
+                <th className="py-3.5 px-4">Company</th>
+                <th className="py-3.5 px-4 text-center">Type</th>
+                <th className="py-3.5 px-4">Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40 text-[11px] text-slate-300 font-medium">
+            <tbody className="divide-y divide-slate-800/40 text-xs md:text-sm text-[var(--color-text-main)] font-medium">
               {filteredEvents.map((ev, i) => {
-                const dateObj = new Date(ev.date);
+                const parts = String(ev.date || '').split('-');
+                const dateObj = parts.length === 3
+                  ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+                  : new Date(ev.date);
                 const dayStr = dateObj.toLocaleDateString('en-IN', { weekday: 'short' });
                 const dateStr = dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-                
+
                 return (
-                  <tr key={i} className="hover:bg-slate-900/30 transition-colors">
+                  <tr key={i} className="hover:bg-[var(--color-card)] transition-colors">
                     {/* Date badge */}
-                    <td className="py-3 px-4 whitespace-nowrap">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-sky-400 bg-sky-950/40 border border-sky-800/30 px-1.5 py-0.5 rounded uppercase font-mono">
+                        <span className="text-xs font-bold text-sky-400 bg-sky-950/40 border border-sky-800/30 px-2 py-0.5 rounded uppercase font-mono">
                           {dayStr}
                         </span>
-                        <span className="font-semibold text-white font-mono">{dateStr}</span>
+                        <span className="font-bold text-[var(--color-text-main)] font-mono">{dateStr}</span>
                       </div>
                     </td>
-                    
+
                     {/* Ticker Symbol */}
-                    <td className="py-3 px-4 font-mono font-bold">
-                      <button 
+                    <td className="py-3.5 px-4 font-mono font-bold">
+                      <button
                         onClick={() => {
                           if ((window as any).triggerTacticalAdvice) {
                             (window as any).triggerTacticalAdvice(
-                              `${ev.symbol} Stock Action`, 
+                              `${ev.symbol} Stock Action`,
                               `Corporate action event: ${ev.event_type} (${ev.details}) scheduled for ${ev.company} on ${ev.date}.`
                             );
                           }
                         }}
-                        className="text-sky-400 hover:text-sky-300 hover:underline text-left cursor-pointer uppercase tracking-wide bg-slate-900/60 px-2 py-1 rounded border border-slate-800"
+                        className="text-sky-400 hover:text-sky-300 hover:underline text-left cursor-pointer uppercase tracking-wide bg-[var(--color-card)] px-2.5 py-1 rounded-md border border-[var(--color-border)] text-xs md:text-sm"
                       >
                         NSE:{ev.symbol}
                       </button>
                     </td>
-                    
+
                     {/* Company name */}
-                    <td className="py-3 px-4 max-w-[200px] truncate text-white/95 font-semibold">
+                    <td className="py-3.5 px-4 max-w-[240px] truncate text-[var(--color-text-main)]/95 font-bold text-xs md:text-sm">
                       {ev.company}
                     </td>
-                    
+
                     {/* Custom type badge */}
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${getBadgeStyle(ev.event_type)}`}>
+                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border uppercase tracking-wider ${getBadgeStyle(ev.event_type)}`}>
                         {getEventIcon(ev.event_type)}
                         {ev.event_type}
                       </span>
                     </td>
-                    
+
                     {/* Details explanation */}
-                    <td className="py-3 px-4 text-slate-400 leading-relaxed font-semibold max-w-[300px] truncate" title={ev.details}>
+                    <td className="py-3.5 px-4 text-[var(--color-text-main)] leading-relaxed font-semibold max-w-[450px]" title={ev.details}>
                       {ev.details}
                     </td>
                   </tr>
